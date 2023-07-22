@@ -27,7 +27,7 @@ var (
 type Params struct {
 	Package        string
 	Exposed        bool
-	Compress       bool
+	Compressed     bool
 	FileMethodName string
 	KeyString      string
 	DataString     string
@@ -56,9 +56,9 @@ func GenerateFile(params *Params, err error) error {
 
 func SetKey(file string, exposed bool, compress bool, key []byte, offset int) (*Params, error) {
 	params := &Params{
-		Exposed:  exposed,
-		Compress: compress,
-		Offset:   offset,
+		Exposed:    exposed,
+		Compressed: compress,
+		Offset:     offset,
 	}
 	if err := populateContextData(params); err != nil {
 		return nil, err
@@ -76,8 +76,8 @@ func SetKey(file string, exposed bool, compress bool, key []byte, offset int) (*
 
 func RandomKeyOffset(file string, exposed bool, compress bool) (*Params, error) {
 	params := &Params{
-		Exposed:  exposed,
-		Compress: compress,
+		Exposed:    exposed,
+		Compressed: compress,
 	}
 	if err := populateContextData(params); err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func populateFileData(params *Params, file string) (int, error) {
 		return 0, err
 	}
 
-	if params.Compress {
+	if params.Compressed {
 		var buf bytes.Buffer
 		w, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 		if err != nil {

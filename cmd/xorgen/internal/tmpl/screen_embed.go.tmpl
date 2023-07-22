@@ -2,42 +2,57 @@
 package {{.Package}}
 
 import (
-    "bytes"
-{{- if .Compress }}
-    "compress/gzip"
-    "github.com/saylorsolutions/gocryptx/pkg/xor"
-    "io"
+	"bytes"
+{{- if .Compressed }}
+	"compress/gzip"
+	"github.com/saylorsolutions/gocryptx/pkg/xor"
+	"io"
 {{- else }}
-    "github.com/saylorsolutions/gocryptx/pkg/xor"
+	"github.com/saylorsolutions/gocryptx/pkg/xor"
 {{- end }}
 )
 
 func {{if .Exposed}}U{{else}}u{{end}}nscreen{{.FileMethodName}}() ([]byte, error) {
-    key := {{ .KeyString }}
-    data := {{ .DataString }}
-    offset := {{ .Offset }}
-    r, err := xor.NewReader(bytes.NewReader(data), key, offset)
-    if err != nil {
-        return nil, err
-    }
-{{- if .Compress }}
-    uncompress, err := gzip.NewReader(r)
-    if err != nil {
-        return nil, err
-    }
-    var out bytes.Buffer
-    _, err = io.Copy(&out, uncompress)
-    if err != nil {
-        return nil, err
-    }
-    uncompress.Close()
-    return out.Bytes(), nil
+	key := {{ .KeyString }}
+	data := {{ .DataString }}
+	offset := {{ .Offset }}
+	r, err := xor.NewReader(bytes.NewReader(data), key, offset)
+	if err != nil {
+		return nil, err
+	}
+{{- if .Compressed }}
+	uncompress, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+	_, err = io.Copy(&out, uncompress)
+	if err != nil {
+		return nil, err
+	}
+	uncompress.Close()
+	return out.Bytes(), nil
 {{- else }}
-    out := make([]byte, len(data))
-    _, err = r.Read(out)
-    if err != nil {
-        return nil, err
-    }
-    return out, nil
+	out := make([]byte, len(data))
+	_, err = r.Read(out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+{{- end }}
+}
+
+func {{if .Exposed}}S{{else}}s{{end}}tream{{.FileMethodName}}() (io.Reader, error) {
+	key := {{ .KeyString }}
+	data := {{ .DataString }}
+	offset := {{ .Offset }}
+{{- if .Compressed }}
+	r, err := xor.NewReader(bytes.NewReader(data), key, offset)
+	if err != nil {
+		return nil, err
+	}
+	return gzip.NewReader(r)
+{{- else }}
+	return xor.NewReader(bytes.NewReader(data), key, offset)
 {{- end }}
 }
