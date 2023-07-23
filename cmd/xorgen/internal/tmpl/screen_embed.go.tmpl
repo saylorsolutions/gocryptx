@@ -12,11 +12,14 @@ import (
 {{- end }}
 )
 
+var (
+	key{{.FileMethodName}} = {{ .KeyString }}
+	data{{.FileMethodName}} = {{ .DataString }}
+	offset{{.FileMethodName}} = {{ .Offset }}
+)
+
 func {{if .Exposed}}U{{else}}u{{end}}nscreen{{.FileMethodName}}() ([]byte, error) {
-	key := {{ .KeyString }}
-	data := {{ .DataString }}
-	offset := {{ .Offset }}
-	r, err := xor.NewReader(bytes.NewReader(data), key, offset)
+	r, err := xor.NewReader(bytes.NewReader(data{{.FileMethodName}}), key{{.FileMethodName}}, offset{{.FileMethodName}})
 	if err != nil {
 		return nil, err
 	}
@@ -43,11 +46,8 @@ func {{if .Exposed}}U{{else}}u{{end}}nscreen{{.FileMethodName}}() ([]byte, error
 }
 
 func {{if .Exposed}}S{{else}}s{{end}}tream{{.FileMethodName}}() (io.Reader, error) {
-	key := {{ .KeyString }}
-	data := {{ .DataString }}
-	offset := {{ .Offset }}
 {{- if .Compressed }}
-	r, err := xor.NewReader(bytes.NewReader(data), key, offset)
+	r, err := xor.NewReader(bytes.NewReader(data{{.FileMethodName}}), key{{.FileMethodName}}, offset{{.FileMethodName}})
 	if err != nil {
 		return nil, err
 	}
