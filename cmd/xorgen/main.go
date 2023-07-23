@@ -19,14 +19,14 @@ func main() {
 	)
 	flags := flag.NewFlagSet("xorgen", flag.ContinueOnError)
 	flags.BoolVarP(&helpFlag, "help", "h", false, "Prints this usage information.")
-	flags.BoolVarP(&exposedFlag, "exposed", "E", false, "Make the unscreen method exposed from the file. It's recommended to only expose from within an internal package.")
+	flags.BoolVarP(&exposedFlag, "exposed", "E", false, "Make the unscreen function exposed from the file. It's recommended to only expose from within an internal package.")
 	flags.BoolVarP(&compressFlag, "compressed", "c", false, "Payload should be gzip compressed when embedded, which includes a checksum to help prevent tampering.")
 	flags.Usage = func() {
 		fmt.Printf(`
 xorgen generates code to embed XOR obfuscated (and optionally compressed) data by generating a *.go file based on the input file. This pairs well with go:generate comments.
 The name of the generated Go file will be based on the name of the input file, replacing characters that match the regex pattern [^a-zA-Z0-9_] with "_".
-For example, given a file called super-secret.txt, a Go file will be created in the current directory called super_secret_txt.go, containing a method called unscreenSuper_secret_txt.
-See the -E flag below to make it an exposed method, and make sure you review the SECURITY notes below if you're unfamiliar with XOR screening.
+For example, given a file called super-secret.txt, a Go file will be created in the current directory called super_secret_txt.go, containing a function called unscreenSuper_secret_txt.
+See the -E flag below to make it an exposed function, and make sure you review the SECURITY notes below if you're unfamiliar with XOR screening.
 
 USAGE:  xorgen FILE [KEY]
 
@@ -41,6 +41,8 @@ FLAGS:
 SECURITY:
     This is not encryption, this is obfuscation, and they are very different things!
 XOR screening is intended to hide embedded data from passive binary analysis only, since XOR screening is easily reversible.
+It's noteworthy that using gzip compression could make part of the XOR key easier to recover, since the gzip header is somewhat predictable.
+This isn't really important to the threat model of this obfuscation method, since the plain text key is stored right next to the screened data.
 `, flags.FlagUsages())
 	}
 	if len(os.Args) == 1 {
