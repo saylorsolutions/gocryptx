@@ -60,7 +60,13 @@ XOR screening is intended to hide embedded data from passive binary analysis onl
 	case 0:
 		fatal("Missing required FILE argument")
 	case 1:
-		if err := tmpl.GenerateFile(tmpl.RandomKeyOffset(flags.Arg(0), exposedFlag, compressFlag)); err != nil {
+		err := tmpl.GenerateFile(
+			flags.Arg(0),
+			tmpl.RandomKey(),
+			tmpl.CompressData(compressFlag),
+			tmpl.ExposeFunctions(exposedFlag),
+		)
+		if err != nil {
 			fatal("Failed to generate file: %v", err)
 		}
 	default:
@@ -69,7 +75,13 @@ XOR screening is intended to hide embedded data from passive binary analysis onl
 		if err != nil {
 			fatal("Failed to decode KEY, must be a hex string with only the characters a-f, A-F, or 0-9")
 		}
-		if err := tmpl.GenerateFile(tmpl.SetKey(flags.Arg(0), exposedFlag, compressFlag, key.Bytes(), 0)); err != nil {
+		err = tmpl.GenerateFile(
+			flags.Arg(0),
+			tmpl.UseKeyOffset(key.Bytes(), 0),
+			tmpl.CompressData(compressFlag),
+			tmpl.ExposeFunctions(exposedFlag),
+		)
+		if err != nil {
 			fatal("Failed to generate file: %v", err)
 		}
 	}

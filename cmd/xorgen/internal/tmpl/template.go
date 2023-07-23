@@ -32,15 +32,81 @@ type Params struct {
 	KeyString      string
 	DataString     string
 	Offset         int
+
 	keyData        []byte
 	fileData       []byte
+	targetFileName string
 }
 
-func GenerateFile(params *Params, err error) error {
-	if err != nil {
+// ParamOpt operates on Params in a standard and predictable way, and is used in GenerateFile.
+// If any ParamOpt returns an error, then file generation ceases and the error is returned.
+type ParamOpt = func(params *Params) error
+
+// CompressData indicates that data should be compressed.
+func CompressData(val ...bool) ParamOpt {
+	return func(params *Params) error {
+		if len(val) > 0 {
+			params.Compressed = val[0]
+			return nil
+		}
+		params.Compressed = true
+		return nil
+	}
+}
+
+// ExposeFunctions indicates that generated functions should be exposed.
+func ExposeFunctions(val ...bool) ParamOpt {
+	return func(params *Params) error {
+		if len(val) > 0 {
+			params.Exposed = val[0]
+			return nil
+		}
+		params.Exposed = true
+		return nil
+	}
+}
+
+// UseKeyOffset sets a key to be used instead of generating one randomly.
+func UseKeyOffset(key []byte, offset int) ParamOpt {
+	return func(params *Params) error {
+		params.keyData = key
+		params.Offset = offset
+		return nil
+	}
+}
+
+// RandomKey generates a random key and offset based on the payload size.
+func RandomKey() ParamOpt {
+	return randomKey
+}
+
+// GenerateFile will generate a file embedding the input file with XOR screening.
+// Various generation options may be passed as zero or more ParamOpt.
+func GenerateFile(input string, opts ...ParamOpt) error {
+	params := new(Params)
+	if err := populateContextData(params); err != nil {
 		return err
 	}
-	out, err := os.Create(uniuncap(params.FileMethodName) + ".go")
+	if err := populateFileData(params, input); err != nil {
+		return err
+	}
+
+	for _, opt := range opts {
+		if err := opt(params); err != nil {
+			return err
+		}
+	}
+
+	if len(params.keyData) == 0 {
+		if err := randomKey(params); err != nil {
+			return err
+		}
+	}
+	if err := screenData(params); err != nil {
+		return err
+	}
+
+	out, err := os.Create(params.targetFileName + ".go")
 	if err != nil {
 		return err
 	}
@@ -52,61 +118,6 @@ func GenerateFile(params *Params, err error) error {
 		return err
 	}
 	return nil
-}
-
-func SetKey(file string, exposed bool, compress bool, key []byte, offset int) (*Params, error) {
-	params := &Params{
-		Exposed:    exposed,
-		Compressed: compress,
-		Offset:     offset,
-	}
-	if err := populateContextData(params); err != nil {
-		return nil, err
-	}
-	_, err := populateFileData(params, file)
-	if err != nil {
-		return nil, err
-	}
-	params.keyData = key
-	if err := screenData(params); err != nil {
-		return nil, err
-	}
-	return params, nil
-}
-
-func RandomKeyOffset(file string, exposed bool, compress bool) (*Params, error) {
-	params := &Params{
-		Exposed:    exposed,
-		Compressed: compress,
-	}
-	if err := populateContextData(params); err != nil {
-		return nil, err
-	}
-	length, err := populateFileData(params, file)
-	if err != nil {
-		return nil, err
-	}
-	var (
-		key    []byte
-		offset int
-	)
-	switch {
-	case length > 3*idealMinKeyLen:
-		key, offset, err = xor.GenKeyAndOffset(length / 3)
-	case length > 2*idealMinKeyLen:
-		key, offset, err = xor.GenKeyAndOffset(length / 2)
-	default:
-		key, offset, err = xor.GenKeyAndOffset(length)
-	}
-	if err != nil {
-		return nil, err
-	}
-	params.keyData = key
-	params.Offset = offset
-	if err := screenData(params); err != nil {
-		return nil, err
-	}
-	return params, nil
 }
 
 func populateContextData(params *Params) error {
@@ -122,10 +133,10 @@ var (
 	fileCleansePattern = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 )
 
-func populateFileData(params *Params, file string) (int, error) {
+func populateFileData(params *Params, file string) error {
 	f, err := os.Open(file)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer func() {
 		_ = f.Close()
@@ -133,33 +144,57 @@ func populateFileData(params *Params, file string) (int, error) {
 
 	data, err := io.ReadAll(f)
 	if err != nil {
-		return 0, err
+		return err
 	}
+	params.fileData = data
+	_, fname := filepath.Split(file)
+	params.FileMethodName = fileCleansePattern.ReplaceAllString(unicap(fname), "_")
+	params.targetFileName = fileCleansePattern.ReplaceAllString(fname, "_")
+	return nil
+}
+
+func randomKey(params *Params) error {
+	var (
+		key    []byte
+		offset int
+		err    error
+		length = len(params.fileData)
+	)
+	switch {
+	case length > 3*idealMinKeyLen:
+		key, offset, err = xor.GenKeyAndOffset(length / 3)
+	case length > 2*idealMinKeyLen:
+		key, offset, err = xor.GenKeyAndOffset(length / 2)
+	default:
+		key, offset, err = xor.GenKeyAndOffset(length)
+	}
+	if err != nil {
+		return err
+	}
+	params.keyData = key
+	params.Offset = offset
+	return nil
+}
+
+func screenData(params *Params) error {
+	var buf bytes.Buffer
 
 	if params.Compressed {
 		var buf bytes.Buffer
 		w, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 		if err != nil {
-			return 0, err
+			return err
 		}
-		_, err = w.Write(data)
+		_, err = w.Write(params.fileData)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if err := w.Close(); err != nil {
-			return 0, err
+			return err
 		}
-		data = buf.Bytes()
+		params.fileData = buf.Bytes()
 	}
-	params.fileData = data
 
-	_, fname := filepath.Split(file)
-	params.FileMethodName = fileCleansePattern.ReplaceAllString(unicap(fname), "_")
-	return len(data), nil
-}
-
-func screenData(params *Params) error {
-	var buf bytes.Buffer
 	w, err := xor.NewWriter(&buf, params.keyData, params.Offset)
 	if err != nil {
 		return err
@@ -182,17 +217,5 @@ func unicap(s string) string {
 		return string(unicode.ToUpper(runes[0]))
 	default:
 		return string(append([]rune{unicode.ToUpper(runes[0])}, runes[1:]...))
-	}
-}
-
-func uniuncap(s string) string {
-	runes := []rune(s)
-	switch len(runes) {
-	case 0:
-		return ""
-	case 1:
-		return string(unicode.ToLower(runes[0]))
-	default:
-		return string(append([]rune{unicode.ToLower(runes[0])}, runes[1:]...))
 	}
 }
