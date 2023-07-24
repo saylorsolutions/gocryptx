@@ -27,7 +27,6 @@ func TestNewKeyGenerator_Custom(t *testing.T) {
 		SetShortDelayIterations(),
 		SetCPUCost(DefaultCpuCost),
 		SetRelativeBlockSize(DefaultRelBlockSize),
-		SetAES512KeySize(),
 		SetAES256KeySize(),
 	)
 	assert.NoError(t, err)

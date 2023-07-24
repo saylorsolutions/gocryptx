@@ -13,7 +13,6 @@ const (
 	DefaultRelBlockSize          = 8
 	DefaultCpuCost               = 1
 	AES256KeySize                = 256 / 8
-	AES512KeySize                = 512 / 8
 )
 
 var (
@@ -33,13 +32,6 @@ type GeneratorOpt = func(*KeyGenerator) error
 func SetAES256KeySize() GeneratorOpt {
 	return func(gen *KeyGenerator) error {
 		gen.aesKeySize = AES256KeySize
-		return nil
-	}
-}
-
-func SetAES512KeySize() GeneratorOpt {
-	return func(gen *KeyGenerator) error {
-		gen.aesKeySize = AES512KeySize
 		return nil
 	}
 }
@@ -132,6 +124,7 @@ func (g *KeyGenerator) GenerateKey(pass []byte) (key, salt []byte, err error) {
 	return key, salt, err
 }
 
+// DeriveKey will recover a key with the salt in the payload and the given passphrase.
 func (g *KeyGenerator) DeriveKey(pass, data []byte) (key []byte, err error) {
 	if len(pass) == 0 {
 		return nil, ErrEmptyPassPhrase
@@ -139,6 +132,11 @@ func (g *KeyGenerator) DeriveKey(pass, data []byte) (key []byte, err error) {
 	if len(data) <= g.aesKeySize {
 		return nil, fmt.Errorf("%w: input data isn't long enough to contain a key salt", ErrInvalidData)
 	}
-	salt := data[len(data)-g.aesKeySize:]
-	return scrypt.Key(pass, salt, g.iterations, g.relativeBlockSize, g.cpuCost, g.aesKeySize)
+	var salt []byte
+	salt = data[len(data)-g.aesKeySize:]
+	key, err = scrypt.Key(pass, salt, g.iterations, g.relativeBlockSize, g.cpuCost, g.aesKeySize)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
