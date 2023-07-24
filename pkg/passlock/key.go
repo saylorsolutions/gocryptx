@@ -3,6 +3,7 @@ package passlock
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"golang.org/x/crypto/scrypt"
 )
 
@@ -13,6 +14,11 @@ const (
 	DefaultCpuCost               = 1
 	AES256KeySize                = 256 / 8
 	AES512KeySize                = 512 / 8
+)
+
+var (
+	ErrEmptyPassPhrase = errors.New("cannot use an empty passphrase")
+	ErrInvalidData     = errors.New("unable to use input data")
 )
 
 type KeyGenerator struct {
@@ -115,10 +121,24 @@ func NewKeyGenerator(opts ...GeneratorOpt) (*KeyGenerator, error) {
 
 // GenerateKey will generate an AES key and salt using the configuration of the KeyGenerator.
 func (g *KeyGenerator) GenerateKey(pass []byte) (key, salt []byte, err error) {
+	if len(pass) == 0 {
+		return nil, nil, ErrEmptyPassPhrase
+	}
 	salt = make([]byte, g.aesKeySize)
 	if _, err = rand.Read(salt); err != nil {
 		return nil, nil, err
 	}
 	key, err = scrypt.Key(pass, salt, g.iterations, g.relativeBlockSize, g.cpuCost, g.aesKeySize)
 	return key, salt, err
+}
+
+func (g *KeyGenerator) DeriveKey(pass, data []byte) (key []byte, err error) {
+	if len(pass) == 0 {
+		return nil, ErrEmptyPassPhrase
+	}
+	if len(data) <= g.aesKeySize {
+		return nil, fmt.Errorf("%w: input data isn't long enough to contain a key salt", ErrInvalidData)
+	}
+	salt := data[len(data)-g.aesKeySize:]
+	return scrypt.Key(pass, salt, g.iterations, g.relativeBlockSize, g.cpuCost, g.aesKeySize)
 }
