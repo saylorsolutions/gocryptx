@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	DefaultLargeIterations       uint32 = 1_048_576
-	DefaultInteractiveIterations uint32 = 131_072
+	DefaultLargeIterations       uint64 = 1 << 30
+	DefaultInteractiveIterations uint64 = 1 << 17
 	DefaultRelBlockSize          uint8  = 8
 	DefaultCpuCost               uint8  = 1
 	AES256KeySize                uint8  = 256 / 8
@@ -22,7 +22,7 @@ var (
 )
 
 type KeyGenerator struct {
-	iterations        uint32
+	iterations        uint64
 	relativeBlockSize uint8
 	cpuCost           uint8
 	aesKeySize        uint8
@@ -66,7 +66,7 @@ func SetShortDelayIterations() GeneratorOpt {
 
 // SetIterations allows the caller to customize the iteration count.
 // Only use this option if you know what you're doing.
-func SetIterations(iterations uint32) GeneratorOpt {
+func SetIterations(iterations uint64) GeneratorOpt {
 	return func(gen *KeyGenerator) error {
 		if iterations <= 1 {
 			return errors.New("iterations cannot be <= 1")
