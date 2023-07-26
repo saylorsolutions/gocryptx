@@ -4,15 +4,16 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	bin "github.com/saylorsolutions/binmap"
 	"golang.org/x/crypto/scrypt"
 )
 
 const (
-	DefaultLargeIterations       = 1_048_576
-	DefaultInteractiveIterations = 131_072
-	DefaultRelBlockSize          = 8
-	DefaultCpuCost               = 1
-	AES256KeySize                = 256 / 8
+	DefaultLargeIterations       uint32 = 1_048_576
+	DefaultInteractiveIterations uint32 = 131_072
+	DefaultRelBlockSize          uint8  = 8
+	DefaultCpuCost               uint8  = 1
+	AES256KeySize                uint8  = 256 / 8
 )
 
 var (
@@ -21,10 +22,19 @@ var (
 )
 
 type KeyGenerator struct {
-	iterations        int
-	relativeBlockSize int
-	cpuCost           int
-	aesKeySize        int
+	iterations        uint32
+	relativeBlockSize uint8
+	cpuCost           uint8
+	aesKeySize        uint8
+}
+
+func (g *KeyGenerator) mapper() bin.Mapper {
+	return bin.MapSequence(
+		bin.Int(&g.iterations),
+		bin.Byte(&g.relativeBlockSize),
+		bin.Byte(&g.cpuCost),
+		bin.Byte(&g.aesKeySize),
+	)
 }
 
 type GeneratorOpt = func(*KeyGenerator) error
@@ -56,7 +66,7 @@ func SetShortDelayIterations() GeneratorOpt {
 
 // SetIterations allows the caller to customize the iteration count.
 // Only use this option if you know what you're doing.
-func SetIterations(iterations int) GeneratorOpt {
+func SetIterations(iterations uint32) GeneratorOpt {
 	return func(gen *KeyGenerator) error {
 		if iterations <= 1 {
 			return errors.New("iterations cannot be <= 1")
@@ -71,7 +81,7 @@ func SetIterations(iterations int) GeneratorOpt {
 
 // SetCPUCost sets the parallelism factor for key generation from the default of 1.
 // Only use this option if you know what you're doing.
-func SetCPUCost(cost int) GeneratorOpt {
+func SetCPUCost(cost uint8) GeneratorOpt {
 	return func(gen *KeyGenerator) error {
 		if cost < DefaultCpuCost {
 			return errors.New("cpu cost must be at least 1")
@@ -83,7 +93,7 @@ func SetCPUCost(cost int) GeneratorOpt {
 
 // SetRelativeBlockSize sets the relative block size.
 // Only use this option if you know what you're doing.
-func SetRelativeBlockSize(size int) GeneratorOpt {
+func SetRelativeBlockSize(size uint8) GeneratorOpt {
 	return func(gen *KeyGenerator) error {
 		if size < DefaultRelBlockSize {
 			return errors.New("relative block size must be at least 8")
@@ -120,7 +130,7 @@ func (g *KeyGenerator) GenerateKey(pass []byte) (key, salt []byte, err error) {
 	if _, err = rand.Read(salt); err != nil {
 		return nil, nil, err
 	}
-	key, err = scrypt.Key(pass, salt, g.iterations, g.relativeBlockSize, g.cpuCost, g.aesKeySize)
+	key, err = scrypt.Key(pass, salt, int(g.iterations), int(g.relativeBlockSize), int(g.cpuCost), int(g.aesKeySize))
 	return key, salt, err
 }
 
@@ -129,12 +139,12 @@ func (g *KeyGenerator) DeriveKey(pass, data []byte) (key []byte, err error) {
 	if len(pass) == 0 {
 		return nil, ErrEmptyPassPhrase
 	}
-	if len(data) <= g.aesKeySize {
+	if len(data) <= int(g.aesKeySize) {
 		return nil, fmt.Errorf("%w: input data isn't long enough to contain a key salt", ErrInvalidData)
 	}
 	var salt []byte
-	salt = data[len(data)-g.aesKeySize:]
-	key, err = scrypt.Key(pass, salt, g.iterations, g.relativeBlockSize, g.cpuCost, g.aesKeySize)
+	salt = data[len(data)-int(g.aesKeySize):]
+	key, err = scrypt.Key(pass, salt, int(g.iterations), int(g.relativeBlockSize), int(g.cpuCost), int(g.aesKeySize))
 	if err != nil {
 		return nil, err
 	}
