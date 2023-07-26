@@ -19,12 +19,12 @@ var (
 	ErrInvalidPassword = errors.New("invalid password")
 )
 
-type MultiKey struct {
+type surrogateKey struct {
 	id           string
 	encryptedKey []byte
 }
 
-func (k *MultiKey) mapper() bin.Mapper {
+func (k *surrogateKey) mapper() bin.Mapper {
 	return bin.MapSequence(
 		bin.FixedString(&k.id, idFieldLen),
 		bin.DynamicSlice(&k.encryptedKey, bin.Byte),
@@ -32,7 +32,7 @@ func (k *MultiKey) mapper() bin.Mapper {
 }
 
 type MultiLocker struct {
-	mkeys   []MultiKey
+	surKeys []surrogateKey
 	payload []byte
 
 	baseKey []byte
@@ -67,7 +67,7 @@ func (l *MultiLocker) validateForUpdate() error {
 
 func (l *MultiLocker) mapper() bin.Mapper {
 	return bin.MapSequence(
-		bin.DynamicSlice(&l.mkeys, func(k *MultiKey) bin.Mapper {
+		bin.DynamicSlice(&l.surKeys, func(k *surrogateKey) bin.Mapper {
 			return k.mapper()
 		}),
 		l.keyGen.mapper(),
@@ -93,15 +93,11 @@ func (l *MultiLocker) Read(r io.Reader) error {
 }
 
 func (l *MultiLocker) Write(w io.Writer) error {
-	if len(l.mkeys) == 0 {
-		return errors.New("refusing to write MultiLocker without keys, data will be unrecoverable")
-	}
 	return l.mapper().Write(w, binary.BigEndian)
 }
 
-// EnableUpdate validates the MultiLocker and ensures that it's in a suitable state for updating.
-// The original payload password must be used (not MultiKey passwords) to validate that the correct key is populated.
-// The first validation error will be returned.
+// EnableUpdate validates the MultiLocker and ensures that it's in a suitable state for updating by setting the base key.
+// The original payload passphrase must be used, not a surrogate passphrase, to validate that the correct key is populated.
 func (l *MultiLocker) EnableUpdate(pass []byte) error {
 	err := l.validateInitialized()
 	if err != nil {
@@ -124,8 +120,8 @@ func (l *MultiLocker) DisableUpdate() {
 }
 
 func (l *MultiLocker) ListKeyIDs() []string {
-	ids := make([]string, len(l.mkeys))
-	for i, mk := range l.mkeys {
+	ids := make([]string, len(l.surKeys))
+	for i, mk := range l.surKeys {
 		ids[i] = mk.id
 	}
 	sort.Strings(ids)
@@ -147,11 +143,11 @@ func (l *MultiLocker) AddPass(id string, pass []byte) error {
 	if err != nil {
 		return err
 	}
-	newKey := MultiKey{
+	newKey := surrogateKey{
 		id:           id,
 		encryptedKey: encryptedKey,
 	}
-	l.mkeys = append(l.mkeys, newKey)
+	l.surKeys = append(l.surKeys, newKey)
 	return nil
 }
 
@@ -159,9 +155,9 @@ func (l *MultiLocker) RemovePass(id string) error {
 	if err := l.validateForUpdate(); err != nil {
 		return err
 	}
-	for i := 0; i < len(l.mkeys); i++ {
-		if l.mkeys[i].id == id {
-			l.mkeys = append(l.mkeys[:i], l.mkeys[i+1:]...)
+	for i := 0; i < len(l.surKeys); i++ {
+		if l.surKeys[i].id == id {
+			l.surKeys = append(l.surKeys[:i], l.surKeys[i+1:]...)
 			return nil
 		}
 	}
@@ -183,7 +179,7 @@ func (l *MultiLocker) UpdatePass(id string, pass []byte) error {
 	if err != nil {
 		return err
 	}
-	for _, mk := range l.mkeys {
+	for _, mk := range l.surKeys {
 		if mk.id == id {
 			mk.encryptedKey = encryptedKey
 			return nil
@@ -196,8 +192,23 @@ func (l *MultiLocker) Lock(pass []byte, unencrypted []byte) error {
 	if l.keyGen == nil {
 		return errors.New("missing key generator")
 	}
-	if len(l.mkeys) > 0 {
-		return errors.New("locking a new payload will invalidate all existing MultiKeys")
+	if len(l.surKeys) > 0 {
+		if err := l.validateForUpdate(); err != nil {
+			return fmt.Errorf("cannot Lock a new payload with surrogate keys until update is enabled: %w", err)
+		}
+		key, salt, err := l.keyGen.DeriveKeySalt(pass, l.payload)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(key, l.baseKey) {
+			return fmt.Errorf("%w: passphrase doesn't match base passphrase", ErrInvalidPassword)
+		}
+		newPayload, err := Lock(l.baseKey, salt, unencrypted)
+		if err != nil {
+			return err
+		}
+		l.payload = newPayload
+		return nil
 	}
 	key, salt, err := l.keyGen.GenerateKey(pass)
 	if err != nil {
@@ -216,7 +227,7 @@ func (l *MultiLocker) Unlock(id string, pass []byte) ([]byte, error) {
 	if err := l.validateInitialized(); err != nil {
 		return nil, err
 	}
-	for _, mk := range l.mkeys {
+	for _, mk := range l.surKeys {
 		if mk.id == id {
 			passKey, err := l.keyGen.DeriveKey(pass, mk.encryptedKey)
 			if err != nil {

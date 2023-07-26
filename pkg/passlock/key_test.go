@@ -57,6 +57,7 @@ func TestKeyGenerator_mapper(t *testing.T) {
 		SetIterations(1<<4),
 		SetCPUCost(4),
 		SetRelativeBlockSize(128),
+		SetAES128KeySize(),
 	)
 	assert.NoError(t, err)
 	assert.NoError(t, updated.mapper().Read(&buf, binary.BigEndian))

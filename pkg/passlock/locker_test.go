@@ -30,3 +30,29 @@ func TestLockUnlock(t *testing.T) {
 	assert.NotEqual(t, encrypted, unencrypted)
 	assert.Equal(t, data, string(unencrypted))
 }
+
+func TestLockUnlock128(t *testing.T) {
+	const password = "password"
+	const data = "How wonderful life is while you're in the world"
+	dataBytes := []byte(data)
+
+	gen, err := NewKeyGenerator(SetShortDelayIterations(), SetAES128KeySize())
+	assert.NoError(t, err)
+	key, salt, err := gen.GenerateKey([]byte(password))
+	assert.NoError(t, err)
+
+	encrypted, err := Lock(key, salt, dataBytes)
+	t.Log(string(encrypted))
+	assert.NoError(t, err)
+	assert.NotEqual(t, dataBytes, encrypted)
+
+	key2, err := gen.DeriveKey([]byte(password), encrypted)
+	assert.NoError(t, err)
+	assert.Equal(t, key, key2)
+
+	unencrypted, err := Unlock(key2, encrypted)
+	t.Log(string(unencrypted))
+	assert.NoError(t, err)
+	assert.NotEqual(t, encrypted, unencrypted)
+	assert.Equal(t, data, string(unencrypted))
+}
