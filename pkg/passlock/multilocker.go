@@ -15,7 +15,8 @@ const (
 )
 
 var (
-	ErrInvalidHeader = errors.New("invalid MultiLocker header")
+	ErrInvalidHeader   = errors.New("invalid MultiLocker header")
+	ErrInvalidPassword = errors.New("invalid password")
 )
 
 type MultiKey struct {
@@ -44,12 +45,22 @@ func NewMultiLocker(gen *KeyGenerator) *MultiLocker {
 	}
 }
 
-func (l *MultiLocker) validate() error {
+func (l *MultiLocker) validateInitialized() error {
 	if len(l.payload) == 0 {
 		return errors.New("no payload set for update")
 	}
 	if l.keyGen == nil {
 		return errors.New("no generator set")
+	}
+	return nil
+}
+
+func (l *MultiLocker) validateForUpdate() error {
+	if err := l.validateInitialized(); err != nil {
+		return err
+	}
+	if len(l.baseKey) == 0 {
+		return errors.New("payload baseKey is not populated, enable update on this MultiLocker first")
 	}
 	return nil
 }
@@ -88,7 +99,7 @@ func (l *MultiLocker) Write(w io.Writer) error {
 // The original payload password must be used (not MultiKey passwords) to validate that the correct key is populated.
 // The first validation error will be returned.
 func (l *MultiLocker) EnableUpdate(pass []byte) error {
-	err := l.validate()
+	err := l.validateInitialized()
 	if err != nil {
 		return err
 	}
@@ -98,10 +109,14 @@ func (l *MultiLocker) EnableUpdate(pass []byte) error {
 	}
 	_, err = Unlock(derivedKey, l.payload)
 	if err != nil {
-		return fmt.Errorf("invalid base key: %w", err)
+		return fmt.Errorf("%w: invalid base pass", ErrInvalidPassword)
 	}
 	l.baseKey = derivedKey
 	return nil
+}
+
+func (l *MultiLocker) DisableUpdate() {
+	l.baseKey = nil
 }
 
 func (l *MultiLocker) ListKeyIDs() []string {
@@ -114,13 +129,10 @@ func (l *MultiLocker) ListKeyIDs() []string {
 }
 
 func (l *MultiLocker) AddPass(id string, pass []byte) error {
-	if len(id) > idFieldLen {
-		return fmt.Errorf("id value is greater than the maximum field width of %d", idFieldLen)
+	if len(id) > idFieldLen || len(id) == 0 {
+		return fmt.Errorf("id value is not within the valid range of 1-%d bytes", idFieldLen)
 	}
-	if len(l.baseKey) == 0 {
-		return errors.New("payload baseKey is not populated, prepare the MultiLocker for update first")
-	}
-	if err := l.validate(); err != nil {
+	if err := l.validateForUpdate(); err != nil {
 		return err
 	}
 	newPassKey, salt, err := l.keyGen.GenerateKey(pass)
@@ -139,23 +151,24 @@ func (l *MultiLocker) AddPass(id string, pass []byte) error {
 	return nil
 }
 
-func (l *MultiLocker) RemovePass(id string) {
+func (l *MultiLocker) RemovePass(id string) error {
+	if err := l.validateForUpdate(); err != nil {
+		return err
+	}
 	for i := 0; i < len(l.mkeys); i++ {
 		if l.mkeys[i].id == id {
 			l.mkeys = append(l.mkeys[:i], l.mkeys[i+1:]...)
-			return
+			return nil
 		}
 	}
+	return nil
 }
 
 func (l *MultiLocker) UpdatePass(id string, pass []byte) error {
 	if len(id) > idFieldLen {
 		return fmt.Errorf("id value is greater than the maximum field width of %d", idFieldLen)
 	}
-	if len(l.baseKey) == 0 {
-		return errors.New("payload baseKey is not populated, prepare the MultiLocker for update first")
-	}
-	if err := l.validate(); err != nil {
+	if err := l.validateForUpdate(); err != nil {
 		return err
 	}
 	newPassKey, salt, err := l.keyGen.GenerateKey(pass)
@@ -196,7 +209,7 @@ func (l *MultiLocker) Lock(pass []byte, unencrypted []byte) error {
 }
 
 func (l *MultiLocker) Unlock(id string, pass []byte) ([]byte, error) {
-	if err := l.validate(); err != nil {
+	if err := l.validateInitialized(); err != nil {
 		return nil, err
 	}
 	for _, mk := range l.mkeys {
@@ -207,12 +220,12 @@ func (l *MultiLocker) Unlock(id string, pass []byte) ([]byte, error) {
 			}
 			baseKey, err := Unlock(passKey, mk.encryptedKey)
 			if err != nil {
-				return nil, errors.New("invalid password")
+				return nil, ErrInvalidPassword
 			}
 			data, err := Unlock(baseKey, l.payload)
 			baseKey = nil
 			if err != nil {
-				return nil, fmt.Errorf("failed to decrypt payload: %w", err)
+				return nil, fmt.Errorf("%w: invalid base pass", ErrInvalidPassword)
 			}
 			return data, nil
 		}
