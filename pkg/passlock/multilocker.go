@@ -71,17 +71,20 @@ func (l *MultiLocker) mapper() bin.Mapper {
 			return k.mapper()
 		}),
 		l.keyGen.mapper(),
-		bin.Any(&l.payload, func(r io.Reader, endian binary.ByteOrder) error {
-			payload, err := io.ReadAll(r)
-			if err != nil {
+		bin.Any(
+			func(r io.Reader, endian binary.ByteOrder) error {
+				payload, err := io.ReadAll(r)
+				if err != nil {
+					return err
+				}
+				l.payload = payload
+				return nil
+			},
+			func(w io.Writer, endian binary.ByteOrder) error {
+				_, err := io.Copy(w, bytes.NewReader(l.payload))
 				return err
-			}
-			l.payload = payload
-			return nil
-		}, func(w io.Writer, endian binary.ByteOrder) error {
-			_, err := io.Copy(w, bytes.NewReader(l.payload))
-			return err
-		}),
+			},
+		),
 	)
 }
 
