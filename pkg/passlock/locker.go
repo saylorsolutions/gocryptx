@@ -9,7 +9,7 @@ import (
 // Lock will encrypt the payload with the given key, and append the given salt to the payload.
 // Exposure of the salt doesn't weaken the key, since the passphrase is also required to arrive at the same key.
 // However, tampering with the salt or the payload would prevent Unlock from recovering the plaintext payload.
-func Lock(key, salt, data []byte) ([]byte, error) {
+func Lock(key Key, salt Salt, data Plaintext) (Encrypted, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func Lock(key, salt, data []byte) ([]byte, error) {
 
 // Unlock will decrypt the payload after stripping the salt from the end of it.
 // The salt length is expected to match the key length (which is enforced by KeyGenerator).
-func Unlock(key, data []byte) ([]byte, error) {
+func Unlock(key Key, data Encrypted) (Plaintext, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err

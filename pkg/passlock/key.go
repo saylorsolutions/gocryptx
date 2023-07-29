@@ -22,6 +22,21 @@ var (
 	ErrInvalidData     = errors.New("unable to use input data")
 )
 
+// Key is an AES key that can be used to encrypt or decrypt an encrypted payload.
+type Key []byte
+
+// Salt is a slice of secure random bytes that is used with scrypt to generate a Key from a Passphrase.
+type Salt []byte
+
+// Passphrase is a human-readable string used to generate a Key.
+type Passphrase []byte
+
+// Encrypted is an encrypted payload.
+type Encrypted []byte
+
+// Plaintext is an unencrypted payload.
+type Plaintext []byte
+
 type KeyGenerator struct {
 	iterations        uint64
 	relativeBlockSize uint8
@@ -130,11 +145,11 @@ func NewKeyGenerator(opts ...GeneratorOpt) (*KeyGenerator, error) {
 }
 
 // GenerateKey will generate an AES key and salt using the configuration of the KeyGenerator.
-func (g *KeyGenerator) GenerateKey(pass []byte) (key, salt []byte, err error) {
+func (g *KeyGenerator) GenerateKey(pass Passphrase) (key Key, salt Salt, err error) {
 	if len(pass) == 0 {
 		return nil, nil, ErrEmptyPassPhrase
 	}
-	salt = make([]byte, g.aesKeySize)
+	salt = make(Salt, g.aesKeySize)
 	if _, err = rand.Read(salt); err != nil {
 		return nil, nil, err
 	}
@@ -144,24 +159,31 @@ func (g *KeyGenerator) GenerateKey(pass []byte) (key, salt []byte, err error) {
 
 // DeriveKey will recover a key with the salt in the payload and the given passphrase.
 // This doesn't ensure that the given passphrase is the *correct* passphrase used to encrypt the payload.
-func (g *KeyGenerator) DeriveKey(pass, data []byte) (key []byte, err error) {
+func (g *KeyGenerator) DeriveKey(pass Passphrase, data Encrypted) (key Key, err error) {
 	key, _, err = g.DeriveKeySalt(pass, data)
 	return key, err
 }
 
 // DeriveKeySalt will recover a key and the original salt in the payload with the given passphrase.
 // This doesn't ensure that the given passphrase is the *correct* passphrase used to encrypt the payload.
-func (g *KeyGenerator) DeriveKeySalt(pass, data []byte) (key []byte, salt []byte, err error) {
+func (g *KeyGenerator) DeriveKeySalt(pass Passphrase, data Encrypted) (key Key, salt Salt, err error) {
 	if len(pass) == 0 {
 		return nil, nil, ErrEmptyPassPhrase
 	}
 	if len(data) <= int(g.aesKeySize) {
 		return nil, nil, fmt.Errorf("%w: input data isn't long enough to contain a key salt", ErrInvalidData)
 	}
-	salt = data[len(data)-int(g.aesKeySize):]
+	salt = Salt(data[len(data)-int(g.aesKeySize):])
 	key, err = scrypt.Key(pass, salt, int(g.iterations), int(g.relativeBlockSize), int(g.cpuCost), int(g.aesKeySize))
 	if err != nil {
 		return nil, nil, err
 	}
 	return key, salt, nil
+}
+
+func (g *KeyGenerator) DeriveSalt(data Encrypted) (salt Salt, err error) {
+	if uint64(len(data)) <= uint64(g.aesKeySize) {
+		return nil, fmt.Errorf("%w: data is not long enough to contain a valid salt", ErrInvalidData)
+	}
+	return Salt(data[:len(data)-int(g.aesKeySize)]), nil
 }

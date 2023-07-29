@@ -21,21 +21,21 @@ var (
 
 type surrogateKey struct {
 	id           string
-	encryptedKey []byte
+	encryptedKey Encrypted
 }
 
 func (k *surrogateKey) mapper() bin.Mapper {
 	return bin.MapSequence(
 		bin.FixedString(&k.id, idFieldLen),
-		bin.DynamicSlice(&k.encryptedKey, bin.Byte),
+		bin.DynamicSlice((*[]byte)(&k.encryptedKey), bin.Byte),
 	)
 }
 
 type MultiLocker struct {
 	surKeys []surrogateKey
-	payload []byte
+	payload Encrypted
 
-	baseKey []byte
+	baseKey Key
 	keyGen  *KeyGenerator
 }
 
@@ -131,7 +131,7 @@ func (l *MultiLocker) ListKeyIDs() []string {
 	return ids
 }
 
-func (l *MultiLocker) AddPass(id string, pass []byte) error {
+func (l *MultiLocker) AddPass(id string, pass Passphrase) error {
 	if len(id) > idFieldLen || len(id) == 0 {
 		return fmt.Errorf("id value is not within the valid range of 1-%d bytes", idFieldLen)
 	}
@@ -142,7 +142,8 @@ func (l *MultiLocker) AddPass(id string, pass []byte) error {
 	if err != nil {
 		return err
 	}
-	encryptedKey, err := Lock(newPassKey, salt, l.baseKey)
+	plainKey := Plaintext(l.baseKey)
+	encryptedKey, err := Lock(newPassKey, salt, plainKey)
 	if err != nil {
 		return err
 	}
@@ -167,7 +168,7 @@ func (l *MultiLocker) RemovePass(id string) error {
 	return nil
 }
 
-func (l *MultiLocker) UpdatePass(id string, pass []byte) error {
+func (l *MultiLocker) UpdatePass(id string, pass Passphrase) error {
 	if len(id) > idFieldLen {
 		return fmt.Errorf("id value is greater than the maximum field width of %d", idFieldLen)
 	}
@@ -178,7 +179,8 @@ func (l *MultiLocker) UpdatePass(id string, pass []byte) error {
 	if err != nil {
 		return err
 	}
-	encryptedKey, err := Lock(newPassKey, salt, l.baseKey)
+	plainKey := Plaintext(l.baseKey)
+	encryptedKey, err := Lock(newPassKey, salt, plainKey)
 	if err != nil {
 		return err
 	}
@@ -236,14 +238,15 @@ func (l *MultiLocker) Unlock(id string, pass []byte) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			baseKey, err := Unlock(passKey, mk.encryptedKey)
+			unencKey, err := Unlock(passKey, mk.encryptedKey)
 			if err != nil {
 				return nil, ErrInvalidPassword
 			}
+			baseKey := Key(unencKey)
 			data, err := Unlock(baseKey, l.payload)
 			baseKey = nil
 			if err != nil {
-				return nil, fmt.Errorf("%w: invalid base pass", ErrInvalidPassword)
+				return nil, fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
 			}
 			return data, nil
 		}
