@@ -47,7 +47,7 @@ func NewMultiLocker(gen *KeyGenerator) *MultiLocker {
 
 func (l *MultiLocker) validateInitialized() error {
 	if len(l.payload) == 0 {
-		return errors.New("no payload set for update")
+		return errors.New("no payload set")
 	}
 	if l.keyGen == nil {
 		return errors.New("no generator set")
@@ -131,7 +131,7 @@ func (l *MultiLocker) ListKeyIDs() []string {
 	return ids
 }
 
-func (l *MultiLocker) AddPass(id string, pass Passphrase) error {
+func (l *MultiLocker) AddSurrogatePass(id string, pass Passphrase) error {
 	if len(id) > idFieldLen || len(id) == 0 {
 		return fmt.Errorf("id value is not within the valid range of 1-%d bytes", idFieldLen)
 	}
@@ -155,7 +155,7 @@ func (l *MultiLocker) AddPass(id string, pass Passphrase) error {
 	return nil
 }
 
-func (l *MultiLocker) RemovePass(id string) error {
+func (l *MultiLocker) RemoveSurrogatePass(id string) error {
 	if err := l.validateForUpdate(); err != nil {
 		return err
 	}
@@ -168,14 +168,14 @@ func (l *MultiLocker) RemovePass(id string) error {
 	return nil
 }
 
-func (l *MultiLocker) UpdatePass(id string, pass Passphrase) error {
+func (l *MultiLocker) UpdateSurrogatePass(id string, newPass Passphrase) error {
 	if len(id) > idFieldLen {
 		return fmt.Errorf("id value is greater than the maximum field width of %d", idFieldLen)
 	}
 	if err := l.validateForUpdate(); err != nil {
 		return err
 	}
-	newPassKey, salt, err := l.keyGen.GenerateKey(pass)
+	newPassKey, salt, err := l.keyGen.GenerateKey(newPass)
 	if err != nil {
 		return err
 	}
@@ -198,17 +198,18 @@ func (l *MultiLocker) Lock(pass []byte, unencrypted []byte) error {
 		return errors.New("missing key generator")
 	}
 	if len(l.surKeys) > 0 {
-		if err := l.validateForUpdate(); err != nil {
+		if err := l.validateInitialized(); err != nil {
 			return fmt.Errorf("cannot Lock a new payload with surrogate keys until update is enabled: %w", err)
 		}
 		key, salt, err := l.keyGen.DeriveKeySalt(pass, l.payload)
 		if err != nil {
 			return err
 		}
-		if !bytes.Equal(key, l.baseKey) {
-			return fmt.Errorf("%w: passphrase doesn't match base passphrase", ErrInvalidPassword)
+		_, err = Unlock(key, l.payload)
+		if err != nil {
+			return ErrInvalidPassword
 		}
-		newPayload, err := Lock(l.baseKey, salt, unencrypted)
+		newPayload, err := Lock(key, salt, unencrypted)
 		if err != nil {
 			return err
 		}
@@ -232,13 +233,13 @@ func (l *MultiLocker) Unlock(id string, pass []byte) ([]byte, error) {
 	if err := l.validateInitialized(); err != nil {
 		return nil, err
 	}
-	for _, mk := range l.surKeys {
-		if mk.id == id {
-			passKey, err := l.keyGen.DeriveKey(pass, mk.encryptedKey)
+	for _, sur := range l.surKeys {
+		if sur.id == id {
+			passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedKey)
 			if err != nil {
 				return nil, err
 			}
-			unencKey, err := Unlock(passKey, mk.encryptedKey)
+			unencKey, err := Unlock(passKey, sur.encryptedKey)
 			if err != nil {
 				return nil, ErrInvalidPassword
 			}
@@ -252,4 +253,46 @@ func (l *MultiLocker) Unlock(id string, pass []byte) ([]byte, error) {
 		}
 	}
 	return nil, errors.New("multikey ID not found")
+}
+
+// WriteMultiLocker is the same as MultiLocker, except that the logical constraint that surrogate keys cannot write a new payload is lifted.
+type WriteMultiLocker struct {
+	*MultiLocker
+}
+
+func NewWriteMultiLocker(gen *KeyGenerator) *WriteMultiLocker {
+	return &WriteMultiLocker{
+		MultiLocker: NewMultiLocker(gen),
+	}
+}
+
+func (l *WriteMultiLocker) SurrogateLock(id string, pass Passphrase, unencrypted Plaintext) error {
+	if err := l.validateInitialized(); err != nil {
+		return err
+	}
+	for _, sur := range l.surKeys {
+		if sur.id == id {
+			passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedKey)
+			if err != nil {
+				return err
+			}
+			unencKey, err := Unlock(passKey, sur.encryptedKey)
+			if err != nil {
+				return ErrInvalidPassword
+			}
+			baseKey := Key(unencKey)
+			_, err = Unlock(baseKey, l.payload)
+			if err != nil {
+				return fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
+			}
+			salt, err := l.keyGen.DeriveSalt(l.payload)
+			if err != nil {
+				return err
+			}
+			l.payload, err = Lock(baseKey, salt, unencrypted)
+			baseKey = nil
+			return err
+		}
+	}
+	return errors.New("multikey ID not found")
 }

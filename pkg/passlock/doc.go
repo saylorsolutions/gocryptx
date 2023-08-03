@@ -18,7 +18,8 @@ A MultiLocker with surrogate keys and encrypted payload may be persisted to disk
 
 A freshly read MultiLocker may not be changed in any way. Editing is enabled by calling EnableUpdate with the base passphrase.
 After this call completes successfully, surrogate keys may be added or removed.
-A new encrypted payload may not be set to a MultiLocker if surrogate keys exist, and the MultiLocker has not had EnableUpdate called. Allowing this operation would invalidate those keys otherwise.
+A new encrypted payload may only be set in a MultiLocker with the base passphrase.
+A WriteMultiLocker allows surrogate passphrases to be used to lock a new payload, instead of just the base passphrase.
 
 # General guidelines:
   - It's possible to customize the CPU cost, iteration count, and relative block size parameters directly for key generation. If you're not an expert, then don't use SetIterations, SetCPUCost, or SetRelativeBlockSize.

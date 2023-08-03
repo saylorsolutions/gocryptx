@@ -170,7 +170,7 @@ func (g *KeyGenerator) DeriveKeySalt(pass Passphrase, data Encrypted) (key Key, 
 	if len(pass) == 0 {
 		return nil, nil, ErrEmptyPassPhrase
 	}
-	if len(data) <= int(g.aesKeySize) {
+	if uint64(len(data)) <= uint64(g.aesKeySize) {
 		return nil, nil, fmt.Errorf("%w: input data isn't long enough to contain a key salt", ErrInvalidData)
 	}
 	salt = Salt(data[len(data)-int(g.aesKeySize):])
@@ -185,5 +185,5 @@ func (g *KeyGenerator) DeriveSalt(data Encrypted) (salt Salt, err error) {
 	if uint64(len(data)) <= uint64(g.aesKeySize) {
 		return nil, fmt.Errorf("%w: data is not long enough to contain a valid salt", ErrInvalidData)
 	}
-	return Salt(data[:len(data)-int(g.aesKeySize)]), nil
+	return Salt(data[len(data)-int(g.aesKeySize):]), nil
 }
