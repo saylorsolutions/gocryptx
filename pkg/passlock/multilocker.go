@@ -20,19 +20,11 @@ var (
 )
 
 type surrogateKey struct {
-	id           string
 	encryptedKey Encrypted
 }
 
-func (k *surrogateKey) mapper() bin.Mapper {
-	return bin.MapSequence(
-		bin.FixedString(&k.id, idFieldLen),
-		bin.DynamicSlice((*[]byte)(&k.encryptedKey), bin.Byte),
-	)
-}
-
 type MultiLocker struct {
-	surKeys []surrogateKey
+	surKeys map[string]surrogateKey
 	payload Encrypted
 
 	baseKey Key
@@ -41,7 +33,8 @@ type MultiLocker struct {
 
 func NewMultiLocker(gen *KeyGenerator) *MultiLocker {
 	return &MultiLocker{
-		keyGen: gen,
+		keyGen:  gen,
+		surKeys: map[string]surrogateKey{},
 	}
 }
 
@@ -67,8 +60,12 @@ func (l *MultiLocker) validateForUpdate() error {
 
 func (l *MultiLocker) mapper() bin.Mapper {
 	return bin.MapSequence(
-		bin.DynamicSlice(&l.surKeys, func(k *surrogateKey) bin.Mapper {
-			return k.mapper()
+		bin.Map(&l.surKeys, func(key *string) bin.Mapper {
+			return bin.FixedString(key, idFieldLen)
+		}, func(val *surrogateKey) bin.Mapper {
+			return bin.DynamicSlice((*[]byte)(&val.encryptedKey), func(e *byte) bin.Mapper {
+				return bin.Byte(e)
+			})
 		}),
 		l.keyGen.mapper(),
 		bin.Any(
@@ -124,8 +121,8 @@ func (l *MultiLocker) DisableUpdate() {
 
 func (l *MultiLocker) ListKeyIDs() []string {
 	ids := make([]string, len(l.surKeys))
-	for i, mk := range l.surKeys {
-		ids[i] = mk.id
+	for id := range l.surKeys {
+		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	return ids
@@ -134,6 +131,9 @@ func (l *MultiLocker) ListKeyIDs() []string {
 func (l *MultiLocker) AddSurrogatePass(id string, pass Passphrase) error {
 	if len(id) > idFieldLen || len(id) == 0 {
 		return fmt.Errorf("id value is not within the valid range of 1-%d bytes", idFieldLen)
+	}
+	if _, ok := l.surKeys[id]; ok {
+		return fmt.Errorf("surrogate key ID already exists")
 	}
 	if err := l.validateForUpdate(); err != nil {
 		return err
@@ -148,10 +148,9 @@ func (l *MultiLocker) AddSurrogatePass(id string, pass Passphrase) error {
 		return err
 	}
 	newKey := surrogateKey{
-		id:           id,
 		encryptedKey: encryptedKey,
 	}
-	l.surKeys = append(l.surKeys, newKey)
+	l.surKeys[id] = newKey
 	return nil
 }
 
@@ -159,18 +158,21 @@ func (l *MultiLocker) RemoveSurrogatePass(id string) error {
 	if err := l.validateForUpdate(); err != nil {
 		return err
 	}
-	for i := 0; i < len(l.surKeys); i++ {
-		if l.surKeys[i].id == id {
-			l.surKeys = append(l.surKeys[:i], l.surKeys[i+1:]...)
-			return nil
-		}
+	_, ok := l.surKeys[id]
+	if !ok {
+		return nil
 	}
+	delete(l.surKeys, id)
 	return nil
 }
 
 func (l *MultiLocker) UpdateSurrogatePass(id string, newPass Passphrase) error {
 	if len(id) > idFieldLen {
 		return fmt.Errorf("id value is greater than the maximum field width of %d", idFieldLen)
+	}
+	sur, ok := l.surKeys[id]
+	if !ok {
+		return errors.New("given ID is not present in this MultiLocker")
 	}
 	if err := l.validateForUpdate(); err != nil {
 		return err
@@ -184,13 +186,8 @@ func (l *MultiLocker) UpdateSurrogatePass(id string, newPass Passphrase) error {
 	if err != nil {
 		return err
 	}
-	for _, mk := range l.surKeys {
-		if mk.id == id {
-			mk.encryptedKey = encryptedKey
-			return nil
-		}
-	}
-	return errors.New("given ID is not present in this MultiLocker")
+	sur.encryptedKey = encryptedKey
+	return nil
 }
 
 func (l *MultiLocker) Lock(pass []byte, unencrypted []byte) error {
@@ -233,26 +230,25 @@ func (l *MultiLocker) Unlock(id string, pass []byte) ([]byte, error) {
 	if err := l.validateInitialized(); err != nil {
 		return nil, err
 	}
-	for _, sur := range l.surKeys {
-		if sur.id == id {
-			passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedKey)
-			if err != nil {
-				return nil, err
-			}
-			unencKey, err := Unlock(passKey, sur.encryptedKey)
-			if err != nil {
-				return nil, ErrInvalidPassword
-			}
-			baseKey := Key(unencKey)
-			data, err := Unlock(baseKey, l.payload)
-			baseKey = nil
-			if err != nil {
-				return nil, fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
-			}
-			return data, nil
-		}
+	sur, ok := l.surKeys[id]
+	if !ok {
+		return nil, errors.New("surrogate key ID not found")
 	}
-	return nil, errors.New("multikey ID not found")
+	passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedKey)
+	if err != nil {
+		return nil, err
+	}
+	unencKey, err := Unlock(passKey, sur.encryptedKey)
+	if err != nil {
+		return nil, ErrInvalidPassword
+	}
+	baseKey := Key(unencKey)
+	data, err := Unlock(baseKey, l.payload)
+	baseKey = nil
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
+	}
+	return data, nil
 }
 
 // WriteMultiLocker is the same as MultiLocker, except that the logical constraint that surrogate keys cannot write a new payload is lifted.
@@ -270,29 +266,28 @@ func (l *WriteMultiLocker) SurrogateLock(id string, pass Passphrase, unencrypted
 	if err := l.validateInitialized(); err != nil {
 		return err
 	}
-	for _, sur := range l.surKeys {
-		if sur.id == id {
-			passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedKey)
-			if err != nil {
-				return err
-			}
-			unencKey, err := Unlock(passKey, sur.encryptedKey)
-			if err != nil {
-				return ErrInvalidPassword
-			}
-			baseKey := Key(unencKey)
-			_, err = Unlock(baseKey, l.payload)
-			if err != nil {
-				return fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
-			}
-			salt, err := l.keyGen.DeriveSalt(l.payload)
-			if err != nil {
-				return err
-			}
-			l.payload, err = Lock(baseKey, salt, unencrypted)
-			baseKey = nil
-			return err
-		}
+	sur, ok := l.surKeys[id]
+	if !ok {
+		return errors.New("surrogate key ID not found")
 	}
-	return errors.New("multikey ID not found")
+	passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedKey)
+	if err != nil {
+		return err
+	}
+	unencKey, err := Unlock(passKey, sur.encryptedKey)
+	if err != nil {
+		return ErrInvalidPassword
+	}
+	baseKey := Key(unencKey)
+	_, err = Unlock(baseKey, l.payload)
+	if err != nil {
+		return fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
+	}
+	salt, err := l.keyGen.DeriveSalt(l.payload)
+	if err != nil {
+		return err
+	}
+	l.payload, err = Lock(baseKey, salt, unencrypted)
+	baseKey = nil
+	return err
 }

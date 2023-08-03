@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestMultikey_AddKey(t *testing.T) {
+func TestMultiLocker_AddSurrogatePass(t *testing.T) {
 	var (
 		plaintext = "A secret message"
 		basePass  = "passphrase"
@@ -21,10 +21,6 @@ func TestMultikey_AddKey(t *testing.T) {
 	assert.NoError(t, mk.AddSurrogatePass("other", []byte("some other secret")))
 	assert.NoError(t, mk.Write(&buf))
 
-	mkdata := buf.Bytes()
-	buf.Reset()
-	buf.Write(mkdata)
-
 	mk = NewMultiLocker(gen)
 	assert.NoError(t, mk.Read(&buf))
 	assert.Len(t, mk.surKeys, 2)
@@ -33,7 +29,7 @@ func TestMultikey_AddKey(t *testing.T) {
 	assert.Equal(t, plaintext, string(data))
 }
 
-func TestMultiLocker_RemovePass(t *testing.T) {
+func TestMultiLocker_RemoveSurrogatePass(t *testing.T) {
 	var (
 		plaintext = "A secret message"
 		basePass  = "passphrase"
