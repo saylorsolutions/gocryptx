@@ -53,8 +53,10 @@ func (g *KeyGenerator) mapper() bin.Mapper {
 	)
 }
 
+// GeneratorOpt is a function option to be used with NewKeyGenerator.
 type GeneratorOpt = func(*KeyGenerator) error
 
+// SetAES256KeySize uses 256 bits (32 bytes) as the key size to be generated.
 func SetAES256KeySize() GeneratorOpt {
 	return func(gen *KeyGenerator) error {
 		gen.aesKeySize = AES256KeySize
@@ -62,6 +64,7 @@ func SetAES256KeySize() GeneratorOpt {
 	}
 }
 
+// SetAES128KeySize uses 128 bits (16 bytes) as the key size to be generated.
 func SetAES128KeySize() GeneratorOpt {
 	return func(gen *KeyGenerator) error {
 		gen.aesKeySize = AES128KeySize
@@ -181,6 +184,7 @@ func (g *KeyGenerator) DeriveKeySalt(pass Passphrase, data Encrypted) (key Key, 
 	return key, salt, nil
 }
 
+// DeriveSalt gets the salt value from the encrypted payload.
 func (g *KeyGenerator) DeriveSalt(data Encrypted) (salt Salt, err error) {
 	if uint64(len(data)) <= uint64(g.aesKeySize) {
 		return nil, fmt.Errorf("%w: data is not long enough to contain a valid salt", ErrInvalidData)
