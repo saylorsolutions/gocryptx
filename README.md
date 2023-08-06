@@ -1,6 +1,6 @@
 # Go Cryptx
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/saylorsolutions/gocryptx)]
+![Go Report Card](https://goreportcard.com/badge/github.com/saylorsolutions/gocryptx)
 
 This repo has a few helpful crypto utilities that I've used or plan to use.
 I'm happy to accept PRs relating to functionality or documentation.
