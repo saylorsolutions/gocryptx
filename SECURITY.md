@@ -7,6 +7,7 @@ However, this is a free-time project currently maintained by one person that doe
 **Use at your own risk!**
 
 While I've done my best to ensure that this functionality is working as intended, I do not recommend using any of this for anything that could risk life, limb, property, or any material harm without extensive, independent security review.
+See the [License](LICENSE) for full terms of use.
 If you or another party discovers a vulnerability, please see the section below for reporting it.
 
 When the time comes that I am no longer maintaining this repository, either by responding to or resolving functional/security issues, then I will mark it as archived to clearly indicate that it should no longer be used in its current state.
