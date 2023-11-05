@@ -36,7 +36,7 @@ func {{if .Exposed}}U{{else}}u{{end}}nscreen{{.FileMethodName}}() ([]byte, error
 	uncompress.Close()
 	return out.Bytes(), nil
 {{- else }}
-	out := make([]byte, len(data))
+	out := make([]byte, len(data{{.FileMethodName}}))
 	_, err = r.Read(out)
 	if err != nil {
 		return nil, err

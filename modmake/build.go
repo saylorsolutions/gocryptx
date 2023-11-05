@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	xorgenVersion = "1.0.1"
+	xorgenVersion = "1.0.2"
 )
 
 var (
