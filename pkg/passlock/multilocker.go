@@ -40,12 +40,19 @@ func NewMultiLocker(gen *KeyGenerator) *MultiLocker {
 	}
 }
 
+func (l *MultiLocker) validateHasGenerator() error {
+	if l.keyGen == nil {
+		return errors.New("no generator set")
+	}
+	return nil
+}
+
 func (l *MultiLocker) validateInitialized() error {
 	if len(l.payload) == 0 {
 		return errors.New("no payload set")
 	}
-	if l.keyGen == nil {
-		return errors.New("no generator set")
+	if err := l.validateHasGenerator(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -204,9 +211,22 @@ func (l *MultiLocker) UpdateSurrogatePass(id string, newPass Passphrase) error {
 
 // Lock will lock a new payload with the base key.
 // If surrogate keys are present, then the same salt will be used to ensure that surrogate keys are not invalidated.
-func (l *MultiLocker) Lock(pass []byte, unencrypted []byte) error {
-	if err := l.validateInitialized(); err != nil {
+func (l *MultiLocker) Lock(pass []byte, unencrypted Plaintext) error {
+	if err := l.validateHasGenerator(); err != nil {
 		return err
+	}
+	if len(l.payload) == 0 {
+		key, salt, err := l.keyGen.GenerateKey(pass)
+		if err != nil {
+			return err
+		}
+		encrypted, err := Lock(key, salt, unencrypted)
+		if err != nil {
+			return err
+		}
+		l.payload = encrypted
+		l.baseKey = key
+		return nil
 	}
 	if len(l.surKeys) > 0 {
 		// Must maintain the same salt to avoid invalidating surrogate keys

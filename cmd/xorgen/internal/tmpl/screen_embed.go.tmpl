@@ -53,6 +53,6 @@ func {{if .Exposed}}S{{else}}s{{end}}tream{{.FileMethodName}}() (io.Reader, erro
 	}
 	return gzip.NewReader(r)
 {{- else }}
-	return xor.NewReader(bytes.NewReader(data), key, offset)
+	return xor.NewReader(bytes.NewReader(data{{.FileMethodName}}), key{{.FileMethodName}}, offset{{.FileMethodName}})
 {{- end }}
 }

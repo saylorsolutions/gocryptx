@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	. "github.com/saylorsolutions/gocryptx/cmd/internal"
 	"github.com/saylorsolutions/gocryptx/cmd/xorgen/internal/tmpl"
 	flag "github.com/spf13/pflag"
 	"io"
@@ -11,13 +13,17 @@ import (
 	"strings"
 )
 
+var (
+	version      = "unknown"
+	versionFlag  bool
+	helpFlag     bool
+	exposedFlag  bool
+	compressFlag bool
+)
+
 func main() {
-	var (
-		helpFlag     bool
-		exposedFlag  bool
-		compressFlag bool
-	)
 	flags := flag.NewFlagSet("xorgen", flag.ContinueOnError)
+	flags.BoolVar(&versionFlag, "version", false, "Prints the version of this executable")
 	flags.BoolVarP(&helpFlag, "help", "h", false, "Prints this usage information.")
 	flags.BoolVarP(&exposedFlag, "exposed", "E", false, "Make the unscreen function exposed from the file. It's recommended to only expose from within an internal package.")
 	flags.BoolVarP(&compressFlag, "compressed", "c", false, "Payload should be gzip compressed when embedded, which includes a checksum to help prevent tampering.")
@@ -51,16 +57,26 @@ This isn't really important to the threat model of this obfuscation method, sinc
 	}
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		flags.Usage()
-		fatal("Error parsing flags: %v", err)
+		Fatal("Error parsing flags: %v", err)
 	}
 	if helpFlag {
 		flags.Usage()
 		return
 	}
+	if versionFlag {
+		Echo("xorgen version: %s", version)
+		return
+	}
+	if err := run(flags); err != nil {
+		Fatal("Error running xorgen: %v", err)
+	}
+	Echo("xorgen ran successfully")
+}
 
+func run(flags *flag.FlagSet) error {
 	switch flags.NArg() {
 	case 0:
-		fatal("Missing required FILE argument")
+		return errors.New("missing required FILE argument")
 	case 1:
 		err := tmpl.GenerateFile(
 			flags.Arg(0),
@@ -69,13 +85,13 @@ This isn't really important to the threat model of this obfuscation method, sinc
 			tmpl.ExposeFunctions(exposedFlag),
 		)
 		if err != nil {
-			fatal("Failed to generate file: %v", err)
+			return fmt.Errorf("failed to generate file: %w", err)
 		}
 	default:
 		var key bytes.Buffer
 		_, err := io.Copy(&key, hex.NewDecoder(strings.NewReader(flags.Arg(1))))
 		if err != nil {
-			fatal("Failed to decode KEY, must be a hex string with only the characters a-f, A-F, or 0-9")
+			return errors.New("failed to decode KEY, must be a hex string with only the characters a-f, A-F, or 0-9")
 		}
 		err = tmpl.GenerateFile(
 			flags.Arg(0),
@@ -84,19 +100,8 @@ This isn't really important to the threat model of this obfuscation method, sinc
 			tmpl.ExposeFunctions(exposedFlag),
 		)
 		if err != nil {
-			fatal("Failed to generate file: %v", err)
+			return fmt.Errorf("failed to generate file: %w", err)
 		}
 	}
-}
-
-func fatal(msg string, args ...any) {
-	echo(msg, args...)
-	os.Exit(1)
-}
-
-func echo(msg string, args ...any) {
-	if !strings.HasSuffix(msg, "\n") {
-		msg += "\n"
-	}
-	fmt.Printf(msg, args...)
+	return nil
 }
