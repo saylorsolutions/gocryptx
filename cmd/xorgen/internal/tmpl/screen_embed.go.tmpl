@@ -6,10 +6,10 @@ import (
 {{- if .Compressed }}
 	"compress/gzip"
 	"github.com/saylorsolutions/gocryptx/pkg/xor"
-	"io"
 {{- else }}
 	"github.com/saylorsolutions/gocryptx/pkg/xor"
 {{- end }}
+	"io"
 )
 
 var (
