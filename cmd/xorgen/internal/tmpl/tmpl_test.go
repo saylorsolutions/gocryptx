@@ -1,4 +1,4 @@
-//go:generate xorgen -Ec test.txt
+//go:generate xorgen -Ec -p tmpl test.txt
 package tmpl
 
 import (

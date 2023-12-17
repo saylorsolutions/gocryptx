@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"text/template"
 	"unicode"
 )
@@ -78,6 +79,19 @@ func UseKeyOffset(key []byte, offset int) ParamOpt {
 // RandomKey generates a random key and offset based on the payload size.
 func RandomKey() ParamOpt {
 	return randomKey
+}
+
+// PackageName specifies the package name of the generated file.
+// This is useful for cases where the expected package name doesn't match the name of the containing directory.
+func PackageName(name string) ParamOpt {
+	name = strings.TrimSpace(name)
+	return func(params *Params) error {
+		if len(name) == 0 {
+			return nil
+		}
+		params.Package = name
+		return nil
+	}
 }
 
 // GenerateFile will generate a file embedding the input file with XOR screening.
