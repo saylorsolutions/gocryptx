@@ -19,6 +19,7 @@ var (
 	helpFlag     bool
 	exposedFlag  bool
 	compressFlag bool
+	packageFlag  string
 )
 
 func main() {
@@ -27,6 +28,7 @@ func main() {
 	flags.BoolVarP(&helpFlag, "help", "h", false, "Prints this usage information.")
 	flags.BoolVarP(&exposedFlag, "exposed", "E", false, "Make the unscreen function exposed from the file. It's recommended to only expose from within an internal package.")
 	flags.BoolVarP(&compressFlag, "compressed", "c", false, "Payload should be gzip compressed when embedded, which includes a checksum to help prevent tampering.")
+	flags.StringVarP(&packageFlag, "package", "p", "", "Specifies a package name that should be used for the generated file.")
 	flags.Usage = func() {
 		fmt.Printf(`
 xorgen generates code to embed XOR obfuscated (and optionally compressed) data by generating a *.go file based on the input file. This pairs well with go:generate comments.
@@ -83,6 +85,7 @@ func run(flags *flag.FlagSet) error {
 			tmpl.RandomKey(),
 			tmpl.CompressData(compressFlag),
 			tmpl.ExposeFunctions(exposedFlag),
+			tmpl.PackageName(packageFlag),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to generate file: %w", err)
@@ -98,6 +101,7 @@ func run(flags *flag.FlagSet) error {
 			tmpl.UseKeyOffset(key.Bytes(), 0),
 			tmpl.CompressData(compressFlag),
 			tmpl.ExposeFunctions(exposedFlag),
+			tmpl.PackageName(packageFlag),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to generate file: %w", err)
