@@ -21,10 +21,10 @@ func TestMultiLocker_AddSurrogatePass(t *testing.T) {
 	assert.NoError(t, mk.AddSurrogatePass("other", []byte("some other secret")))
 	assert.NoError(t, mk.Write(&buf))
 
-	mk = NewMultiLocker(gen)
-	assert.NoError(t, mk.Read(&buf))
+	mk, err = ReadMultiLocker(&buf)
+	assert.NoError(t, err)
 	assert.Len(t, mk.surKeys, 2)
-	data, err := mk.Unlock("developer", []byte("s3cre+"))
+	data, err := mk.SurrogateUnlock("developer", []byte("s3cre+"))
 	assert.NoError(t, err)
 	assert.Equal(t, plaintext, string(data))
 }
@@ -69,7 +69,7 @@ func TestMultiLocker_ReLock(t *testing.T) {
 	assert.NoError(t, mk.EnableUpdate([]byte(basePass)))
 	assert.NoError(t, mk.Lock([]byte(basePass), []byte(newPlaintext)))
 
-	got, err := mk.Unlock("developer", []byte("s3cre+"))
+	got, err := mk.SurrogateUnlock("developer", []byte("s3cre+"))
 	assert.NoError(t, err)
 	assert.Equal(t, newPlaintext, string(got))
 }
@@ -94,12 +94,12 @@ func TestWriteMultiLocker_SurrogateLock(t *testing.T) {
 	assert.NoError(t, mk.EnableUpdate([]byte(basePass)))
 	assert.NoError(t, mk.Lock([]byte(basePass), []byte(newPlaintext)))
 
-	got, err := mk.Unlock("developer", []byte("s3cre+"))
+	got, err := mk.SurrogateUnlock("developer", []byte("s3cre+"))
 	assert.NoError(t, err)
 	assert.Equal(t, newPlaintext, string(got))
 
 	assert.NoError(t, mk.SurrogateLock("other", []byte("some other secret"), []byte(plaintext)))
-	got, err = mk.Unlock("developer", []byte("s3cre+"))
+	got, err = mk.SurrogateUnlock("developer", []byte("s3cre+"))
 	assert.NoError(t, err)
 	assert.Equal(t, plaintext, string(got))
 }

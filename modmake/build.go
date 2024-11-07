@@ -31,9 +31,5 @@ func main() {
 	xorgen.Variant("darwin", "arm64")
 	b.ImportApp(xorgen)
 
-	b.AddStep(NewStep("install-xorgen", "Installs the xorgen CLI tool").Does(
-		Go().Install("./cmd/xorgen"),
-	).DependsOn(b.Test()))
-
 	b.Execute()
 }

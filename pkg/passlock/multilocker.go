@@ -94,12 +94,15 @@ func (l *MultiLocker) mapper() bin.Mapper {
 	)
 }
 
-// Read will read the MultiLocker as a binary payload from the io.Reader.
-func (l *MultiLocker) Read(r io.Reader) error {
-	if err := l.mapper().Read(r, binary.BigEndian); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidHeader, err)
+// ReadMultiLocker will read a MultiLocker as a binary payload from the io.Reader.
+func ReadMultiLocker(r io.Reader) (*MultiLocker, error) {
+	l := &MultiLocker{
+		keyGen: new(KeyGenerator),
 	}
-	return nil
+	if err := l.mapper().Read(r, binary.BigEndian); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidHeader, err)
+	}
+	return l, nil
 }
 
 // Write will write the MultiLocker as a binary payload to the io.Writer.
@@ -134,8 +137,10 @@ func (l *MultiLocker) DisableUpdate() {
 // ListKeyIDs lists all surrogate key IDs in this MultiLocker.
 func (l *MultiLocker) ListKeyIDs() []string {
 	ids := make([]string, len(l.surKeys))
+	i := 0
 	for id := range l.surKeys {
-		ids = append(ids, id)
+		ids[i] = id
+		i++
 	}
 	sort.Strings(ids)
 	return ids
@@ -265,8 +270,25 @@ func (l *MultiLocker) Lock(pass []byte, unencrypted Plaintext) error {
 	return nil
 }
 
-// Unlock will unlock the payload with a surrogate key.
-func (l *MultiLocker) Unlock(id string, pass []byte) ([]byte, error) {
+// Unlock will unlock the [MultiLocker]'s payload with the base key's pass phrase.
+func (l *MultiLocker) Unlock(pass Passphrase) (Plaintext, error) {
+	if err := l.validateInitialized(); err != nil {
+		return nil, err
+	}
+	baseKey, err := l.keyGen.DeriveKey(pass, l.payload)
+	if err != nil {
+		return nil, ErrInvalidPassword
+	}
+	data, err := Unlock(baseKey, l.payload)
+	baseKey = nil
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
+	}
+	return data, nil
+}
+
+// SurrogateUnlock will unlock the payload with a surrogate key.
+func (l *MultiLocker) SurrogateUnlock(id string, pass Passphrase) ([]byte, error) {
 	if err := l.validateInitialized(); err != nil {
 		return nil, err
 	}
