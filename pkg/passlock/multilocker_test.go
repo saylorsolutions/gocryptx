@@ -3,6 +3,7 @@ package passlock
 import (
 	"bytes"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -72,6 +73,28 @@ func TestMultiLocker_ReLock(t *testing.T) {
 	got, err := mk.SurrogateUnlock("developer", []byte("s3cre+"))
 	assert.NoError(t, err)
 	assert.Equal(t, newPlaintext, string(got))
+}
+
+func TestSurrogateKeyRecovery(t *testing.T) {
+	var (
+		baseKeyPass = Passphrase("base key pass")
+		surKeyPass  = Passphrase("sur key pass")
+		payload     = Plaintext("test payload")
+	)
+	gen, err := NewKeyGenerator(SetShortDelayIterations())
+	require.NoError(t, err)
+	mk := NewMultiLocker(gen)
+
+	require.NoError(t, mk.Lock(baseKeyPass, payload))
+	assert.NoError(t, mk.AddSurrogatePass("test", surKeyPass))
+	mk.DisableUpdate()
+
+	require.NoError(t, mk.EnableUpdate(baseKeyPass))
+	assert.NoError(t, mk.Lock(baseKeyPass, payload))
+
+	plaintext, err := mk.SurrogateUnlock("test", surKeyPass)
+	assert.NoError(t, err)
+	assert.Equal(t, payload, plaintext)
 }
 
 func TestWriteMultiLocker_SurrogateLock(t *testing.T) {

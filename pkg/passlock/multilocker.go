@@ -112,7 +112,7 @@ func (l *MultiLocker) Write(w io.Writer) error {
 
 // EnableUpdate validates the MultiLocker and ensures that it's in a suitable state for updating by setting the base key.
 // The original base passphrase must be used, not a surrogate passphrase, to validate that the correct key is populated.
-func (l *MultiLocker) EnableUpdate(pass []byte) error {
+func (l *MultiLocker) EnableUpdate(pass Passphrase) error {
 	err := l.validateInitialized()
 	if err != nil {
 		return err
@@ -214,14 +214,33 @@ func (l *MultiLocker) UpdateSurrogatePass(id string, newPass Passphrase) error {
 	return nil
 }
 
+// InvalidateLock will encrypt a new payload and remove all surrogate keys.
+// This is done by generating a new base key for the payload with a new salt that renders the existing surrogate keys invalid.
+func (l *MultiLocker) InvalidateLock(pass Passphrase, unencrypted Plaintext) error {
+	if err := l.validateHasGenerator(); err != nil {
+		return err
+	}
+	key, salt, err := l.keyGen.GenerateKey(pass)
+	if err != nil {
+		return err
+	}
+	l.payload, err = Lock(key, salt, unencrypted)
+	if err != nil {
+		return err
+	}
+	l.surKeys = map[string]surrogateKey{}
+	return nil
+}
+
 // Lock will lock a new payload with the base key.
 // If surrogate keys are present, then the same salt will be used to ensure that surrogate keys are not invalidated.
-func (l *MultiLocker) Lock(pass []byte, unencrypted Plaintext) error {
+// If the [MultiLocker] already has a payload set, then the basePass must match what was used to create the initial payload to help prevent someone else from tampering with the store.
+func (l *MultiLocker) Lock(basePass Passphrase, unencrypted Plaintext) error {
 	if err := l.validateHasGenerator(); err != nil {
 		return err
 	}
 	if len(l.payload) == 0 {
-		key, salt, err := l.keyGen.GenerateKey(pass)
+		key, salt, err := l.keyGen.GenerateKey(basePass)
 		if err != nil {
 			return err
 		}
@@ -235,7 +254,7 @@ func (l *MultiLocker) Lock(pass []byte, unencrypted Plaintext) error {
 	}
 	if len(l.surKeys) > 0 {
 		// Must maintain the same salt to avoid invalidating surrogate keys
-		key, salt, err := l.keyGen.DeriveKeySalt(pass, l.payload)
+		key, salt, err := l.keyGen.DeriveKeySalt(basePass, l.payload)
 		if err != nil {
 			return err
 		}
@@ -252,7 +271,7 @@ func (l *MultiLocker) Lock(pass []byte, unencrypted Plaintext) error {
 		l.payload = newPayload
 		return nil
 	}
-	key, salt, err := l.keyGen.GenerateKey(pass)
+	key, salt, err := l.keyGen.GenerateKey(basePass)
 	if err != nil {
 		return err
 	}
@@ -271,11 +290,11 @@ func (l *MultiLocker) Lock(pass []byte, unencrypted Plaintext) error {
 }
 
 // Unlock will unlock the [MultiLocker]'s payload with the base key's pass phrase.
-func (l *MultiLocker) Unlock(pass Passphrase) (Plaintext, error) {
+func (l *MultiLocker) Unlock(basePass Passphrase) (Plaintext, error) {
 	if err := l.validateInitialized(); err != nil {
 		return nil, err
 	}
-	baseKey, err := l.keyGen.DeriveKey(pass, l.payload)
+	baseKey, err := l.keyGen.DeriveKey(basePass, l.payload)
 	if err != nil {
 		return nil, ErrInvalidPassword
 	}
@@ -288,7 +307,7 @@ func (l *MultiLocker) Unlock(pass Passphrase) (Plaintext, error) {
 }
 
 // SurrogateUnlock will unlock the payload with a surrogate key.
-func (l *MultiLocker) SurrogateUnlock(id string, pass Passphrase) ([]byte, error) {
+func (l *MultiLocker) SurrogateUnlock(id string, pass Passphrase) (Plaintext, error) {
 	if err := l.validateInitialized(); err != nil {
 		return nil, err
 	}
@@ -300,12 +319,11 @@ func (l *MultiLocker) SurrogateUnlock(id string, pass Passphrase) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	unencKey, err := Unlock(passKey, sur.encryptedKey)
+	baseKey, err := Unlock(passKey, sur.encryptedKey)
 	if err != nil {
 		return nil, ErrInvalidPassword
 	}
-	baseKey := Key(unencKey)
-	data, err := Unlock(baseKey, l.payload)
+	data, err := Unlock(Key(baseKey), l.payload)
 	baseKey = nil
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
