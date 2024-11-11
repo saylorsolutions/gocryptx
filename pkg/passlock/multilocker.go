@@ -20,7 +20,7 @@ var (
 )
 
 type surrogateKey struct {
-	encryptedKey Encrypted
+	encryptedPass Encrypted
 }
 
 // MultiLocker allows using surrogate keys - in addition to a base key - for reading an encrypted payload.
@@ -29,8 +29,8 @@ type MultiLocker struct {
 	surKeys map[string]surrogateKey
 	payload Encrypted
 
-	baseKey Key
-	keyGen  *KeyGenerator
+	basePass Passphrase
+	keyGen   *KeyGenerator
 }
 
 func NewMultiLocker(gen *KeyGenerator) *MultiLocker {
@@ -61,8 +61,8 @@ func (l *MultiLocker) validateForUpdate() error {
 	if err := l.validateInitialized(); err != nil {
 		return err
 	}
-	if len(l.baseKey) == 0 {
-		return errors.New("payload baseKey is not populated, enable update on this MultiLocker first")
+	if len(l.basePass) == 0 {
+		return errors.New("payload basePass is not populated, enable update on this MultiLocker first")
 	}
 	return nil
 }
@@ -72,7 +72,7 @@ func (l *MultiLocker) mapper() bin.Mapper {
 		bin.Map(&l.surKeys, func(key *string) bin.Mapper {
 			return bin.FixedString(key, idFieldLen)
 		}, func(val *surrogateKey) bin.Mapper {
-			return bin.DynamicSlice((*[]byte)(&val.encryptedKey), func(e *byte) bin.Mapper {
+			return bin.DynamicSlice((*[]byte)(&val.encryptedPass), func(e *byte) bin.Mapper {
 				return bin.Byte(e)
 			})
 		}),
@@ -125,13 +125,13 @@ func (l *MultiLocker) EnableUpdate(pass Passphrase) error {
 	if err != nil {
 		return fmt.Errorf("%w: invalid base pass", ErrInvalidPassword)
 	}
-	l.baseKey = derivedKey
+	l.basePass = pass
 	return nil
 }
 
 // DisableUpdate will disable updates to this MultiLocker.
 func (l *MultiLocker) DisableUpdate() {
-	l.baseKey = nil
+	l.basePass = nil
 }
 
 // ListKeyIDs lists all surrogate key IDs in this MultiLocker.
@@ -162,13 +162,12 @@ func (l *MultiLocker) AddSurrogatePass(id string, pass Passphrase) error {
 	if err != nil {
 		return err
 	}
-	plainKey := Plaintext(l.baseKey)
-	encryptedKey, err := Lock(newPassKey, salt, plainKey)
+	encryptedPass, err := Lock(newPassKey, salt, Plaintext(l.basePass))
 	if err != nil {
 		return err
 	}
 	newKey := surrogateKey{
-		encryptedKey: encryptedKey,
+		encryptedPass: encryptedPass,
 	}
 	l.surKeys[id] = newKey
 	return nil
@@ -205,12 +204,11 @@ func (l *MultiLocker) UpdateSurrogatePass(id string, newPass Passphrase) error {
 	if err != nil {
 		return err
 	}
-	plainKey := Plaintext(l.baseKey)
-	encryptedKey, err := Lock(newPassKey, salt, plainKey)
+	encryptedPass, err := Lock(newPassKey, salt, Plaintext(l.basePass))
 	if err != nil {
 		return err
 	}
-	sur.encryptedKey = encryptedKey
+	sur.encryptedPass = encryptedPass
 	return nil
 }
 
@@ -232,29 +230,17 @@ func (l *MultiLocker) InvalidateLock(pass Passphrase, unencrypted Plaintext) err
 	return nil
 }
 
-// Lock will lock a new payload with the base key.
-// If surrogate keys are present, then the same salt will be used to ensure that surrogate keys are not invalidated.
-// If the [MultiLocker] already has a payload set, then the basePass must match what was used to create the initial payload to help prevent someone else from tampering with the store.
+// Lock will lock a payload with the base key.
+// If surrogate keys are present, or if a payload is set, then the same pass phrase must be used to ensure that surrogate keys are not invalidated.
+// This also helps prevent someone else from tampering with the store.
 func (l *MultiLocker) Lock(basePass Passphrase, unencrypted Plaintext) error {
 	if err := l.validateHasGenerator(); err != nil {
 		return err
 	}
-	if len(l.payload) == 0 {
-		key, salt, err := l.keyGen.GenerateKey(basePass)
-		if err != nil {
-			return err
-		}
-		encrypted, err := Lock(key, salt, unencrypted)
-		if err != nil {
-			return err
-		}
-		l.payload = encrypted
-		l.baseKey = key
-		return nil
-	}
-	if len(l.surKeys) > 0 {
-		// Must maintain the same salt to avoid invalidating surrogate keys
-		key, salt, err := l.keyGen.DeriveKeySalt(basePass, l.payload)
+	if len(l.surKeys) > 0 || len(l.payload) > 0 {
+		// Implies that there is a set payload.
+		// Must use the same pass phrase to avoid invalidating surrogate keys
+		key, _, err := l.keyGen.DeriveKeySalt(basePass, l.payload)
 		if err != nil {
 			return err
 		}
@@ -263,33 +249,21 @@ func (l *MultiLocker) Lock(basePass Passphrase, unencrypted Plaintext) error {
 		if err != nil {
 			return ErrInvalidPassword
 		}
-		// Lock the new payload with the existing base key and the same salt
-		newPayload, err := Lock(key, salt, unencrypted)
-		if err != nil {
-			return err
-		}
-		l.payload = newPayload
-		return nil
 	}
 	key, salt, err := l.keyGen.GenerateKey(basePass)
 	if err != nil {
 		return err
-	}
-	// Check that the key is valid
-	_, err = Unlock(key, l.payload)
-	if err != nil {
-		return ErrInvalidPassword
 	}
 	encrypted, err := Lock(key, salt, unencrypted)
 	if err != nil {
 		return err
 	}
 	l.payload = encrypted
-	l.baseKey = key
+	l.basePass = basePass
 	return nil
 }
 
-// Unlock will unlock the [MultiLocker]'s payload with the base key's pass phrase.
+// Unlock will unlock the [MultiLocker]'s payload with the base pass phrase.
 func (l *MultiLocker) Unlock(basePass Passphrase) (Plaintext, error) {
 	if err := l.validateInitialized(); err != nil {
 		return nil, err
@@ -315,15 +289,19 @@ func (l *MultiLocker) SurrogateUnlock(id string, pass Passphrase) (Plaintext, er
 	if !ok {
 		return nil, errors.New("surrogate key ID not found")
 	}
-	passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedKey)
+	passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedPass)
 	if err != nil {
 		return nil, err
 	}
-	baseKey, err := Unlock(passKey, sur.encryptedKey)
+	basePass, err := Unlock(passKey, sur.encryptedPass)
 	if err != nil {
 		return nil, ErrInvalidPassword
 	}
-	data, err := Unlock(Key(baseKey), l.payload)
+	baseKey, err := l.keyGen.DeriveKey(Passphrase(basePass), l.payload)
+	if err != nil {
+		return nil, err
+	}
+	data, err := Unlock(baseKey, l.payload)
 	baseKey = nil
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
@@ -351,23 +329,20 @@ func (l *WriteMultiLocker) SurrogateLock(id string, pass Passphrase, unencrypted
 	if !ok {
 		return errors.New("surrogate key ID not found")
 	}
-	passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedKey)
+	passKey, err := l.keyGen.DeriveKey(pass, sur.encryptedPass)
 	if err != nil {
 		return err
 	}
-	unencKey, err := Unlock(passKey, sur.encryptedKey)
+	unencKey, err := Unlock(passKey, sur.encryptedPass)
 	if err != nil {
 		return ErrInvalidPassword
 	}
-	baseKey := Key(unencKey)
+	basePass := Passphrase(unencKey)
+	baseKey, salt, err := l.keyGen.DeriveKeySalt(basePass, l.payload)
 	// Ensure the baseKey is valid
 	_, err = Unlock(baseKey, l.payload)
 	if err != nil {
 		return fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
-	}
-	salt, err := l.keyGen.DeriveSalt(l.payload)
-	if err != nil {
-		return err
 	}
 	l.payload, err = Lock(baseKey, salt, unencrypted)
 	baseKey = nil
