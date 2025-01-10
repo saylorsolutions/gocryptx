@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	xorgenVersion = "1.1.0"
+	xorgenVersion = "1.1.1"
 )
 
 func main() {
