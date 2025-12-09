@@ -5,12 +5,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	. "github.com/saylorsolutions/gocryptx/cmd/internal"
-	"github.com/saylorsolutions/gocryptx/cmd/xorgen/internal/tmpl"
-	flag "github.com/spf13/pflag"
 	"io"
 	"os"
 	"strings"
+
+	. "github.com/saylorsolutions/gocryptx/cmd/internal"
+	"github.com/saylorsolutions/gocryptx/cmd/xorgen/internal/tmpl"
+	flag "github.com/spf13/pflag"
 )
 
 var (

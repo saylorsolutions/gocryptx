@@ -1,7 +1,7 @@
 package main
 
 import (
-	. "github.com/saylorsolutions/modmake"
+	. "github.com/saylorsolutions/modmake" //nolint:staticcheck // This lib exposes a DSL-like API.
 )
 
 const (
@@ -11,6 +11,7 @@ const (
 func main() {
 	b := NewBuild()
 	b.Generate().DependsOnRunner("tidy", "", Go().ModTidy())
+	b.LintLatest().EnableSecurityScanning()
 
 	xorgen := NewAppBuild("xorgen", "cmd/xorgen", xorgenVersion)
 	xorgen.Build(func(gb *GoBuild) {

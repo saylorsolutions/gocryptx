@@ -49,6 +49,7 @@ func TestMutualTLS(t *testing.T) {
 	addr := testGetOpenPort(t)
 	t.Log("Server address:", addr)
 	host, _, err := net.SplitHostPort(addr)
+	require.NoError(t, err)
 	srvIP := net.ParseIP(host)
 	ctx, cancel := context.WithCancel(t.Context())
 	caCert, err := GenerateCACert(
@@ -98,11 +99,13 @@ func testMTLSServer(t *testing.T, ctx context.Context, addr string, server *Cert
 		Addr:    addr,
 		Handler: handler,
 		TLSConfig: &tls.Config{
+			MinVersion:   tls.VersionTLS13,
 			RootCAs:      pool,
 			ClientCAs:    pool,
 			Certificates: []tls.Certificate{*srvTlsCert}, // Intermediates would go after the "leaf" server cert.
 			ClientAuth:   tls.RequireAndVerifyClientCert,
 		},
+		ReadHeaderTimeout: time.Second,
 	}
 	wg := testStartServer(t, ctx, srv)
 	return addr, wg
@@ -110,7 +113,7 @@ func testMTLSServer(t *testing.T, ctx context.Context, addr string, server *Cert
 
 func testGetOpenPort(t *testing.T) string {
 	t.Helper()
-	lis, err := net.Listen("tcp", ":0")
+	lis, err := net.Listen("tcp", ":0") //nolint:gosec // This is fine for a test server.
 	require.NoError(t, err)
 	addr := lis.Addr()
 	require.NoError(t, lis.Close())
@@ -149,6 +152,7 @@ func testMTLSClient(t *testing.T, client *CertOutput, pool *x509.CertPool) *http
 	cli := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
+				MinVersion:   tls.VersionTLS13,
 				RootCAs:      pool,
 				Certificates: []tls.Certificate{*cliCert}, // Intermediates would go after the "leaf" client cert.
 			},

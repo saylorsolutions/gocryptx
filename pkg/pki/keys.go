@@ -60,11 +60,11 @@ func ValidateKeypair(pair Keypair) error {
 
 // LoadKeypairFromFile will attempt to read DER/PEM encoded data files as a private and public key pair.
 func LoadKeypairFromFile(priv, pub string) (Keypair, error) {
-	privData, err := os.ReadFile(priv)
+	privData, err := os.ReadFile(priv) //nolint:gosec // This is intended to allow arbitrary file reads.
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key file '%s': %w", priv, err)
 	}
-	pubData, err := os.ReadFile(pub)
+	pubData, err := os.ReadFile(pub) //nolint:gosec // This is intended to allow arbitrary file reads.
 	if err != nil {
 		return nil, fmt.Errorf("failed to read public key file '%s': %w", pub, err)
 	}

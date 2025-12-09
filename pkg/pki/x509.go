@@ -18,7 +18,7 @@ func ReadCACert(path string) (*x509.Certificate, error) {
 }
 
 func readPemCert(path, certType string) (*x509.Certificate, error) {
-	certdata, err := os.ReadFile(path)
+	certdata, err := os.ReadFile(path) //nolint:gosec // This is intended to allow arbitrary file reads.
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s cert at path '%s': %w", certType, path, err)
 	}
@@ -49,7 +49,7 @@ func ReadServerCertAndKey(certpath, keypath string) (*x509.Certificate, crypto.P
 	if !ok {
 		return nil, nil, fmt.Errorf("server certificate at path '%s' does not contain a public key", certpath)
 	}
-	keydata, err := os.ReadFile(keypath)
+	keydata, err := os.ReadFile(keypath) //nolint:gosec // This is intended to allow arbitrary file reads.
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read key file at path '%s': %w", keypath, err)
 	}
