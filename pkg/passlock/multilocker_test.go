@@ -2,9 +2,10 @@ package passlock
 
 import (
 	"bytes"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestMultiLocker_AddSurrogatePass(t *testing.T) {

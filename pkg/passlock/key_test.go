@@ -3,8 +3,9 @@ package passlock
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewKeyGenerator(t *testing.T) {

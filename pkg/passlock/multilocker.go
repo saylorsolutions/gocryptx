@@ -5,9 +5,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	bin "github.com/saylorsolutions/binmap"
 	"io"
 	"sort"
+
+	bin "github.com/saylorsolutions/binmap"
 )
 
 const (

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+
 	bin "github.com/saylorsolutions/binmap"
 	"golang.org/x/crypto/scrypt"
 )
