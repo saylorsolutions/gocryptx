@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -105,14 +104,14 @@ func SANIPAddresses(ips ...net.IP) CertGenOpt {
 }
 
 // WithRSAKey generates an RSA 4096 key to be used with a generated certificate.
+// TODO: Add the ability to use ECDSA and ED25519 keys here too.
 func WithRSAKey() CertGenOpt {
 	return func(opts *certGenOpt) error {
-		priv, err := rsa.GenerateKey(rand.Reader, 4096)
+		kp, err := GenerateRSAKeypair()
 		if err != nil {
-			return fmt.Errorf("failed to generate RSA key pair: %w", err)
+			return err
 		}
-		priv.Precompute()
-		opts.certKeyPair = priv
+		opts.certKeyPair = kp
 		return nil
 	}
 }
