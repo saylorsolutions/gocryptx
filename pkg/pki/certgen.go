@@ -3,6 +3,7 @@ package pki
 import (
 	"bytes"
 	"crypto"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -104,12 +105,35 @@ func SANIPAddresses(ips ...net.IP) CertGenOpt {
 }
 
 // WithRSAKey generates an RSA 4096 key to be used with a generated certificate.
-// TODO: Add the ability to use ECDSA and ED25519 keys here too.
 func WithRSAKey() CertGenOpt {
 	return func(opts *certGenOpt) error {
 		kp, err := GenerateRSAKeypair()
 		if err != nil {
 			return err
+		}
+		opts.certKeyPair = kp
+		return nil
+	}
+}
+
+// WithECDSAKey generates an ECDSA key - using the given curve - to be used with a generated certificate.
+func WithECDSAKey(curve elliptic.Curve) CertGenOpt {
+	return func(opts *certGenOpt) error {
+		kp, err := GenerateECDSAKeypair(curve)
+		if err != nil {
+			return fmt.Errorf("failed to generate ECDSA key pair: %w", err)
+		}
+		opts.certKeyPair = kp
+		return nil
+	}
+}
+
+// WithED25519Key generates an ED25519 key pair to be used with a generated certificate.
+func WithED25519Key() CertGenOpt {
+	return func(opts *certGenOpt) error {
+		kp, err := GenerateED25519Keypair()
+		if err != nil {
+			return fmt.Errorf("failed to generate ED25519 key pair: %w", err)
 		}
 		opts.certKeyPair = kp
 		return nil

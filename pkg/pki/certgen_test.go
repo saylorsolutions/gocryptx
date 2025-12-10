@@ -2,6 +2,7 @@ package pki
 
 import (
 	"context"
+	"crypto/elliptic"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -14,6 +15,29 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestKeyAlgorithms(t *testing.T) {
+	tests := map[string]CertGenOpt{
+		"RSA":        WithRSAKey(),
+		"ECDSA-P224": WithECDSAKey(elliptic.P224()),
+		"ECDSA-P256": WithECDSAKey(elliptic.P256()),
+		"ECDSA-P384": WithECDSAKey(elliptic.P384()),
+		"ECDSA-P521": WithECDSAKey(elliptic.P521()),
+		"ED25519":    WithED25519Key(),
+	}
+
+	for name, opt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result, err := GenerateCACert(
+				new(NameBuilder).CommonName("testing").Build(),
+				opt,
+				ValidFor(1, 0, 0),
+			)
+			require.NoError(t, err)
+			require.NoError(t, ValidateKeypair(result.Keypair()))
+		})
+	}
+}
 
 func TestGenerateCACert(t *testing.T) {
 	sub := new(NameBuilder).Organization("My Org").Build()

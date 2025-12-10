@@ -37,6 +37,7 @@ func GenerateRSAKeypair() (Keypair, error) {
 	return priv, nil
 }
 
+// GenerateECDSAKeypair will generate an ECDSA keypair for use with other operations.
 func GenerateECDSAKeypair(curve elliptic.Curve) (Keypair, error) {
 	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
@@ -48,6 +49,7 @@ func GenerateECDSAKeypair(curve elliptic.Curve) (Keypair, error) {
 	return priv, nil
 }
 
+// GenerateED25519Keypair will generate an ED25519 keypair for use with other operations.
 func GenerateED25519Keypair() (Keypair, error) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
