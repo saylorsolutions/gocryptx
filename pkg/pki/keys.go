@@ -178,18 +178,56 @@ func LoadKeypairFromFile(priv, pub string) (Keypair, error) {
 
 type kpLoader = func(privData, pubData []byte) (Keypair, error)
 
+type publicKeyTypes interface {
+	*rsa.PublicKey | *ecdsa.PublicKey | ed25519.PublicKey
+}
+
+func loadPublicKey[T publicKeyTypes](pubData []byte) (T, error) {
+	var (
+		a   any
+		err error
+	)
+	if a, err = x509.ParsePKIXPublicKey(pubData); err != nil {
+		if a, err = x509.ParsePKCS1PublicKey(pubData); err != nil {
+			return nil, fmt.Errorf("failed to parse public key")
+		}
+	}
+	if pub, ok := a.(T); ok {
+		return pub, nil
+	}
+	return nil, fmt.Errorf("failed to parse public key")
+}
+
+type privateKeyTypes interface {
+	*rsa.PrivateKey | *ecdsa.PrivateKey | ed25519.PrivateKey
+}
+
+func loadPrivateKey[T privateKeyTypes](privData []byte) (T, error) {
+	var (
+		a   any
+		err error
+	)
+	if a, err = x509.ParsePKCS1PrivateKey(privData); err != nil {
+		if a, err = x509.ParsePKCS8PrivateKey(privData); err != nil {
+			if a, err = x509.ParseECPrivateKey(privData); err != nil {
+				return nil, fmt.Errorf("failed to parse private key")
+			}
+		}
+	}
+	if priv, ok := a.(T); ok {
+		return priv, nil
+	}
+	return nil, fmt.Errorf("failed to parse private key")
+}
+
 func loadRSAKeypair(privData, pubData []byte) (Keypair, error) {
-	anyPriv, err := x509.ParsePKCS8PrivateKey(privData)
+	priv, err := loadPrivateKey[*rsa.PrivateKey](privData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse data as private key: %w", err)
+		return nil, err
 	}
-	priv, ok := anyPriv.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse data as RSA private key")
-	}
-	pub, err := x509.ParsePKCS1PublicKey(pubData)
+	pub, err := loadPublicKey[*rsa.PublicKey](pubData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse data as RSA public key: %w", err)
+		return nil, err
 	}
 	priv.PublicKey = *pub
 	if err := ValidateKeypair(priv); err != nil {
@@ -199,23 +237,18 @@ func loadRSAKeypair(privData, pubData []byte) (Keypair, error) {
 }
 
 func loadECDSAKeypair(privData, pubData []byte) (Keypair, error) {
-	anyPriv, err := x509.ParsePKCS8PrivateKey(privData)
+	privKey, err := loadPrivateKey[*ecdsa.PrivateKey](privData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse data as private key: %w", err)
+		return nil, err
 	}
-	privKey, ok := anyPriv.(*ecdsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse data as a ECDSA private key")
-	}
-	anyPub, err := x509.ParsePKIXPublicKey(pubData)
+	pubKey, err := loadPublicKey[*ecdsa.PublicKey](pubData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse data as a public key: %w", err)
-	}
-	pubKey, ok := anyPub.(*ecdsa.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse data as a ECDSA public key")
+		return nil, err
 	}
 	privKey.PublicKey = *pubKey
+	if err := ValidateKeypair(privKey); err != nil {
+		return nil, err
+	}
 	return privKey, nil
 }
 
@@ -231,23 +264,18 @@ func (kp ed25519KeyPair) Public() crypto.PublicKey {
 }
 
 func loadED25519Keypair(privData, pubData []byte) (Keypair, error) {
-	anyPriv, err := x509.ParsePKCS8PrivateKey(privData)
+	privKey, err := loadPrivateKey[ed25519.PrivateKey](privData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse data as private key: %w", err)
+		return nil, err
 	}
-	privKey, ok := anyPriv.(ed25519.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse data as a ED25519 private key")
-	}
-	anyPub, err := x509.ParsePKIXPublicKey(pubData)
+	pubKey, err := loadPublicKey[ed25519.PublicKey](pubData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse data as a public key: %w", err)
-	}
-	pubKey, ok := anyPub.(ed25519.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse data as a ED25519 public key")
+		return nil, err
 	}
 	kp := &ed25519KeyPair{PrivateKey: &privKey, pub: pubKey}
+	if err := ValidateKeypair(kp); err != nil {
+		return nil, err
+	}
 	return kp, nil
 }
 
