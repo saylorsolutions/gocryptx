@@ -4,17 +4,18 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+
 	bin "github.com/saylorsolutions/binmap"
 	"golang.org/x/crypto/scrypt"
 )
 
 const (
-	DefaultLargeIterations       uint64 = 1 << 30
-	DefaultInteractiveIterations uint64 = 1 << 17
-	DefaultRelBlockSize          uint8  = 8
-	DefaultCpuCost               uint8  = 1
-	AES256KeySize                uint8  = 256 / 8
-	AES128KeySize                uint8  = 128 / 8
+	DefaultLargeIterations       int32 = 1 << 30
+	DefaultInteractiveIterations int32 = 1 << 17
+	DefaultRelBlockSize          uint8 = 8
+	DefaultCpuCost               uint8 = 1
+	AES256KeySize                uint8 = 256 / 8
+	AES128KeySize                uint8 = 128 / 8
 )
 
 var (
@@ -38,7 +39,7 @@ type Encrypted []byte
 type Plaintext []byte
 
 type KeyGenerator struct {
-	iterations        uint64
+	iterations        int32
 	relativeBlockSize uint8
 	cpuCost           uint8
 	aesKeySize        uint8
@@ -92,7 +93,7 @@ func SetShortDelayIterations() GeneratorOpt {
 
 // SetIterations allows the caller to customize the iteration count.
 // Only use this option if you know what you're doing.
-func SetIterations(iterations uint64) GeneratorOpt {
+func SetIterations(iterations int32) GeneratorOpt {
 	return func(gen *KeyGenerator) error {
 		if iterations <= 1 {
 			return errors.New("iterations cannot be <= 1")

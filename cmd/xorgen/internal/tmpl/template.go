@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	_ "embed"
 	"fmt"
-	"github.com/saylorsolutions/gocryptx/pkg/xor"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"text/template"
 	"unicode"
+
+	"github.com/saylorsolutions/gocryptx/pkg/xor"
 )
 
 const (

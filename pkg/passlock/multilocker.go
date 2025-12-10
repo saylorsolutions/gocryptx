@@ -5,9 +5,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	bin "github.com/saylorsolutions/binmap"
 	"io"
 	"sort"
+
+	bin "github.com/saylorsolutions/binmap"
 )
 
 const (
@@ -273,7 +274,6 @@ func (l *MultiLocker) Unlock(basePass Passphrase) (Plaintext, error) {
 		return nil, ErrInvalidPassword
 	}
 	data, err := Unlock(baseKey, l.payload)
-	baseKey = nil
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
 	}
@@ -302,7 +302,6 @@ func (l *MultiLocker) SurrogateUnlock(id string, pass Passphrase) (Plaintext, er
 		return nil, err
 	}
 	data, err := Unlock(baseKey, l.payload)
-	baseKey = nil
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
 	}
@@ -339,12 +338,14 @@ func (l *WriteMultiLocker) SurrogateLock(id string, pass Passphrase, unencrypted
 	}
 	basePass := Passphrase(unencKey)
 	baseKey, salt, err := l.keyGen.DeriveKeySalt(basePass, l.payload)
+	if err != nil {
+		return fmt.Errorf("unable to derive key and salt from payload: %w", err)
+	}
 	// Ensure the baseKey is valid
 	_, err = Unlock(baseKey, l.payload)
 	if err != nil {
 		return fmt.Errorf("%w: invalid base key", ErrInvalidPassword)
 	}
 	l.payload, err = Lock(baseKey, salt, unencrypted)
-	baseKey = nil
 	return err
 }

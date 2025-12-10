@@ -20,6 +20,9 @@ These should be resolved ***outside*** of the normal PR flow to protect users fr
     * The key generator may be tuned to match your threat model, but reasonable default are provided.
   * This also includes a way to encrypt/decrypt a payload with multiple, surrogate keys. This allows multiple, independent passphrases to be used to interact with a payload.
   * There are no guarantees that this mechanism is interoperable with other passphrase locking mechanisms or systems.
+* **pki:** This package provides some easy to use utilities for working with x509 certificate chains.
+  * Generate keys and certificates, including building a chain of trust from root CA, to intermediates, to client and server certs.
+  * Multiple key algorithms supported: RSA, ECDSA, and ED25519.
 
 ## Applications
 * **xorgen:** Provides a CLI that can be used with go:generate comments to easily embed XOR screened and compressed files.

@@ -2,10 +2,11 @@
 package tmpl
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUnscreenTest_txt(t *testing.T) {

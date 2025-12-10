@@ -1,10 +1,10 @@
 module github.com/saylorsolutions/gocryptx/cmd/xorgen
 
-go 1.23.0
+go 1.25.5
 
 require (
-	github.com/spf13/pflag v1.0.6
-	github.com/stretchr/testify v1.10.0
+	github.com/spf13/pflag v1.0.10
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
