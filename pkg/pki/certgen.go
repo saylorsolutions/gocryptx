@@ -428,7 +428,7 @@ func GenerateClientCert(subject pkix.Name, opts ...CertGenOpt) (*CertOutput, err
 	options.cert.BasicConstraintsValid = true
 	certBytes, serverCert, err := createSignedCert(options)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create server certificate: %w", err)
+		return nil, fmt.Errorf("failed to create client certificate: %w", err)
 	}
 	return &CertOutput{
 		certData: certBytes,
