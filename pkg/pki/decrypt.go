@@ -35,12 +35,12 @@ func (d *decryptOptions) apply(opts ...DecryptOption) error {
 
 type DecryptOption func(options *decryptOptions) error
 
-func RSADecryptExpectLabel(expected []byte) DecryptOption {
+func RSADecryptExpectLabel(expected string) DecryptOption {
 	return func(options *decryptOptions) error {
-		if expected == nil {
+		if len(expected) == 0 {
 			return fmt.Errorf("empty RSA decryption label")
 		}
-		options.rsa.expectedLabel = expected
+		options.rsa.expectedLabel = []byte(expected)
 		return nil
 	}
 }
