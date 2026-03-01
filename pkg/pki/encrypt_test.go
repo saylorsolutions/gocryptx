@@ -33,6 +33,7 @@ func TestRSAEncryptLabel(t *testing.T) {
 	require.NoError(t, err)
 	testPayload := []byte("Test message")
 	encrypted, err := pki.Encrypt(sender, receiver.Public(), testPayload, pki.RSAEncryptLabel("test"))
+	require.NoError(t, err)
 	t.Run("Without label", func(t *testing.T) {
 		_, err := pki.Decrypt(receiver, sender.Public(), encrypted)
 		require.Error(t, err, "Should be an error since the label doesn't match")
@@ -51,6 +52,7 @@ func TestRSAEncryptHash(t *testing.T) {
 	require.NoError(t, err)
 	testPayload := []byte("Test message")
 	encrypted, err := pki.Encrypt(sender, receiver.Public(), testPayload, pki.RSAEncryptHash(sha512.New()))
+	require.NoError(t, err)
 	t.Run("Wrong hash", func(t *testing.T) {
 		_, err := pki.Decrypt(receiver, sender.Public(), encrypted, pki.RSADecryptHash(sha256.New()))
 		require.Error(t, err, "Should be an error since a different hash function was used")
