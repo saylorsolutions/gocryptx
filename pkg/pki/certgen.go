@@ -141,9 +141,7 @@ func WithED25519Key() CertGenOpt {
 }
 
 // UseKeypair allows specifying a Keypair to use instead of generating a fresh Keypair.
-// It's generally preferred to generate new keys for certificates, but there are specific cases where this is useful.
-//
-// Avoid using this where possible.
+// It's generally preferred to generate new keys for certificates, but there are cases where this is useful.
 func UseKeypair(keys Keypair) CertGenOpt {
 	return func(opts *certGenOpt) error {
 		if err := ValidateKeypair(keys); err != nil {
@@ -409,8 +407,9 @@ func GenerateServerCert(subject pkix.Name, opts ...CertGenOpt) (*CertOutput, err
 }
 
 // GenerateClientCert generates a client certificate for mTLS scenarios.
-// This means that the client may *also* be verified along with servers, establishing a policy of zero-trust.
+// This allows the client to *also* be verified along with servers, establishing a policy of zero-trust.
 // This is most useful in higher security/risk scenarios, where more verification is desired to limit risk.
+// It is also useful establishing more managed trust boundaries, like between different operating environments.
 // It may also be used as part of a Multi-Factor Authentication (MFA) scheme to validate machines as well as users.
 func GenerateClientCert(subject pkix.Name, opts ...CertGenOpt) (*CertOutput, error) {
 	validateOpts := []CertGenOpt{

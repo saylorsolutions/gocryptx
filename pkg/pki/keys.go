@@ -7,7 +7,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -63,77 +62,25 @@ func GenerateED25519Keypair() (Keypair, error) {
 
 // ValidateKeypair is used to verify that the private and public keys are associated with each other.
 func ValidateKeypair(pair Keypair) error {
-	switch priv := pair.(type) {
-	case *rsa.PrivateKey:
-		orig, err := randomSignatureTarget()
-		if err != nil {
-			return err
-		}
-		pub := priv.PublicKey
-		hashed := sha256.Sum256(orig)
-		sig, err := rsa.SignPKCS1v15(rand.Reader, priv, crypto.SHA256, hashed[:])
-		if err != nil {
-			return fmt.Errorf("failed to sign data for verification: %w", err)
-		}
-		if err := rsa.VerifyPKCS1v15(&pub, crypto.SHA256, hashed[:], sig); err != nil {
-			return fmt.Errorf("failed to verify private and public key association by signature: %w", err)
-		}
-		return nil
-	case *ecdsa.PrivateKey:
-		orig, err := randomSignatureTarget()
-		if err != nil {
-			return err
-		}
-		hash := sha256.Sum256(orig)
-		pub := priv.PublicKey
-		sig, err := ecdsa.SignASN1(rand.Reader, priv, hash[:])
-		if err != nil {
-			return fmt.Errorf("failed to sign data for verification: %w", err)
-		}
-		if !ecdsa.VerifyASN1(&pub, hash[:], sig) {
-			return fmt.Errorf("failed to verify private and public key association by signature")
-		}
-		return nil
-	case *ed25519.PrivateKey:
-		orig, err := randomSignatureTarget()
-		if err != nil {
-			return err
-		}
-		pub, ok := priv.Public().(ed25519.PublicKey)
-		if !ok {
-			return fmt.Errorf("no public key associated with ed25519 private key")
-		}
-		sig := ed25519.Sign(*priv, orig)
-		if !ed25519.Verify(pub, orig, sig) {
-			return fmt.Errorf("failed to verify private and public key association by signature")
-		}
-		return nil
-	case *ed25519KeyPair:
-		orig, err := randomSignatureTarget()
-		if err != nil {
-			return err
-		}
-		pub, ok := priv.Public().(ed25519.PublicKey)
-		if !ok {
-			return fmt.Errorf("no public key associated with ed25519 private key")
-		}
-		sig := ed25519.Sign(*priv.PrivateKey, orig)
-		if !ed25519.Verify(pub, orig, sig) {
-			return fmt.Errorf("failed to verify private and public key association by signature")
-		}
-		return nil
-	default:
-		return NotSupported("private key algorithm is not supported")
+	orig := randomSignatureTarget()
+	sig, err := Sign(pair, orig)
+	if err != nil {
+		return err
 	}
+	verified, err := Verify(pair.Public(), orig, sig)
+	if err != nil {
+		return err
+	}
+	if !verified {
+		return fmt.Errorf("keys do not match")
+	}
+	return nil
 }
 
-func randomSignatureTarget() ([]byte, error) {
+func randomSignatureTarget() []byte {
 	orig := make([]byte, 255)
-	_, err := rand.Read(orig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate random data for signature verification: %w", err)
-	}
-	return orig, nil
+	_, _ = rand.Read(orig)
+	return orig
 }
 
 // LoadKeypairFromFile will attempt to read the given data files as a private and public key pair.
