@@ -3,6 +3,7 @@ module github.com/saylorsolutions/gocryptx
 go 1.25.5
 
 require (
+	filippo.io/edwards25519 v1.2.0
 	github.com/saylorsolutions/binmap v0.5.0
 	github.com/saylorsolutions/modmake v0.6.1
 	github.com/stretchr/testify v1.11.1
